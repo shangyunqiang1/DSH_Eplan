@@ -1,0 +1,164 @@
+# DSH_Eplan bundle patch.
+#
+# Mounts the EPLAN integration. Everything is local after the one-time crawl:
+#   1. dsh-eplan        - Host plugin: always-on EPLAN system-prompt guidance.
+#   2. eplan            - Local EPLAN automation MCP server (bundled eplan-mcp,
+#                         discovery mode by default; set EPLAN_MCP_MODE=full in
+#                         the env block below for the ~217 direct tools).
+#   3. eplan2025        - Offline, version-exact EPLAN P8 2025 .NET API reference
+#                         built from the installed EPLAN XML docs.
+#   4. eplan2025guide   - Offline P8 2025 platform help (user guide, dialogs),
+#                         crawled once from www.eplan.help into SQLite FTS5.
+#   5. eplan2026        - Offline P8 2026 help (API reference + platform user
+#                         guide), crawled once from www.eplan.help into SQLite.
+#   6. eplan2027        - Offline P8 2027 help (API reference + platform user
+#                         guide), same build.
+#   7. eecpro           - Offline EEC Pro 2026 help, same build.
+#
+# Row 5 and 6 start disabled: the installed platform is P8 2025, so the 2025
+# API reference and 2025 platform help answer. Enable a row in 设置 → 插件
+# when you work with that release; the switch persists in the profile patch.
+#
+# Every row above names its own package under mcp/ (dsh-eplan/mcp/<row>) so the
+# plugin list shows a real title and description instead of six identical
+# "@deepseek-ai/dsh-mcp-client" entries. Those packages only re-export the MCP
+# client and carry locale text; the config below still does all the work.
+#
+# Launcher paths and cwd values below are absolute: scripts/setup.ps1 rewrites
+# them to the bundle root it finds itself in, so after moving or copying the
+# folder just re-run it (it is idempotent and touches nothing else).
+#
+# The SQLite indexes live in <bundle>/data by default; set EPLAN_DATA_DIR to
+# keep them somewhere else (per-docset EPLAN2025_DB / EPLAN2025_GUIDE_DB /
+# EPLAN2026_DB / EPLAN2027_DB / EECPRO_DB still win over it).
+- insert:
+    - id: dsh-eplan
+      name: 'dsh-eplan'
+
+    - id: eplan-mcp
+      name: 'dsh-eplan/mcp/eplan'
+      config:
+        serverName: eplan
+        transport: stdio
+        command: 'C:\Windows\System32\cmd.exe'
+        args:
+          - '/d'
+          - '/c'
+          - 'F:\Users\Desktop\DSH_Eplan\scripts\launch-eplan-mcp.cmd'
+        cwd: 'F:\Users\Desktop\DSH_Eplan\vendor\eplan-mcp\eplan-p8-mcp-server\mcp_server'
+        env:
+          EPLAN_MCP_MODE: discovery
+          MCP_TRANSPORT: stdio
+          PYTHONIOENCODING: utf-8
+          PYTHONUTF8: '1'
+        toolCallTimeoutMs: 600000
+        failOnStartupError: true
+        reconnect:
+          enabled: true
+          maxAttempts: 3
+
+    - id: eplan-docs-2025
+      name: 'dsh-eplan/mcp/eplan2025'
+      config:
+        serverName: eplan2025
+        transport: stdio
+        command: 'C:\Windows\System32\cmd.exe'
+        args:
+          - '/d'
+          - '/c'
+          - 'F:\Users\Desktop\DSH_Eplan\scripts\launch-docs2025.cmd'
+        cwd: 'F:\Users\Desktop\DSH_Eplan\server\docs2025'
+        env:
+          PYTHONIOENCODING: utf-8
+          PYTHONUTF8: '1'
+        toolCallTimeoutMs: 60000
+        failOnStartupError: true
+        reconnect:
+          enabled: true
+          maxAttempts: 3
+
+    - id: eplan-guide-2025
+      name: 'dsh-eplan/mcp/eplan2025guide'
+      config:
+        serverName: eplan2025guide
+        transport: stdio
+        command: 'C:\Windows\System32\cmd.exe'
+        args:
+          - '/d'
+          - '/c'
+          - 'F:\Users\Desktop\DSH_Eplan\scripts\launch-docs2025guide.cmd'
+        cwd: 'F:\Users\Desktop\DSH_Eplan\server\docs'
+        env:
+          PYTHONIOENCODING: utf-8
+          PYTHONUTF8: '1'
+        toolCallTimeoutMs: 60000
+        failOnStartupError: true
+        reconnect:
+          enabled: true
+          maxAttempts: 3
+
+    - id: eplan-docs-2026
+      name: 'dsh-eplan/mcp/eplan2026'
+      # Off by default: the 2025 docs answer for the installed P8 2025 platform.
+      # Turn a row on in 设置 → 插件 when you work with that release.
+      disabled: true
+      config:
+        serverName: eplan2026
+        transport: stdio
+        command: 'C:\Windows\System32\cmd.exe'
+        args:
+          - '/d'
+          - '/c'
+          - 'F:\Users\Desktop\DSH_Eplan\scripts\launch-docs2026.cmd'
+        cwd: 'F:\Users\Desktop\DSH_Eplan\server\docs'
+        env:
+          PYTHONIOENCODING: utf-8
+          PYTHONUTF8: '1'
+        toolCallTimeoutMs: 60000
+        failOnStartupError: true
+        reconnect:
+          enabled: true
+          maxAttempts: 3
+
+    - id: eplan-docs-2027
+      name: 'dsh-eplan/mcp/eplan2027'
+      # Off by default: the 2025 docs answer for the installed P8 2025 platform.
+      # Turn a row on in 设置 → 插件 when you work with that release.
+      disabled: true
+      config:
+        serverName: eplan2027
+        transport: stdio
+        command: 'C:\Windows\System32\cmd.exe'
+        args:
+          - '/d'
+          - '/c'
+          - 'F:\Users\Desktop\DSH_Eplan\scripts\launch-docs2027.cmd'
+        cwd: 'F:\Users\Desktop\DSH_Eplan\server\docs'
+        env:
+          PYTHONIOENCODING: utf-8
+          PYTHONUTF8: '1'
+        toolCallTimeoutMs: 60000
+        failOnStartupError: true
+        reconnect:
+          enabled: true
+          maxAttempts: 3
+
+    - id: eec-pro-docs
+      name: 'dsh-eplan/mcp/eecpro'
+      config:
+        serverName: eecpro
+        transport: stdio
+        command: 'C:\Windows\System32\cmd.exe'
+        args:
+          - '/d'
+          - '/c'
+          - 'F:\Users\Desktop\DSH_Eplan\scripts\launch-docseecpro.cmd'
+        cwd: 'F:\Users\Desktop\DSH_Eplan\server\docs'
+        env:
+          PYTHONIOENCODING: utf-8
+          PYTHONUTF8: '1'
+        toolCallTimeoutMs: 60000
+        failOnStartupError: true
+        reconnect:
+          enabled: true
+          maxAttempts: 3

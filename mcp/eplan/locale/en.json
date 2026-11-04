@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "EPLAN remote connection",
+    "description": "Drives the local EPLAN Electric P8 2025 instance through the Remote Client interface"
+  }
+}

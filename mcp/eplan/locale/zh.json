@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "EPLAN 远程连接",
+    "description": "连接本机 EPLAN Electric P8 2025，执行动作与脚本（eplan_* 工具）"
+  }
+}

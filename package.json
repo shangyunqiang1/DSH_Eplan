@@ -1,0 +1,59 @@
+{
+  "name": "dsh-eplan",
+  "version": "0.2.3",
+  "private": true,
+  "type": "module",
+  "description": "EPLAN Electric P8 integration for DeepSeek Harness: local EPLAN automation MCP, offline P8 2025 API reference and platform guide, plus offline P8 2026 / 2027 / EEC Pro documentation lookup.",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./icon": "./icon.svg",
+    "./locale/*.json": "./locale/*.json",
+    "./mcp/*/locale/en.json": "./mcp/*/locale/en.json",
+    "./mcp/*/locale/zh.json": "./mcp/*/locale/zh.json",
+    "./mcp/*": "./mcp/*/index.js"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "mcp/*/index.js",
+    "mcp/*/locale/*.json",
+    "lib/*.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "skills/**/*.md",
+    "server/**/*.py",
+    "server/**/*.md",
+    "scripts/*",
+    "vendor/**",
+    "data/README.md",
+    "README.md",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": []
+    }
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-mcp-client": ">=0.2.1-rc.1"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh-plugin",
+    "eplan",
+    "eplan-electric-p8",
+    "eec-pro",
+    "mcp"
+  ],
+  "license": "MIT"
+}
