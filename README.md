@@ -70,7 +70,9 @@ EEC Pro 进 `eec-pro-development`，插件本身坏了进 `eplan-setup`。正文
    2025 的 API 索引完全来自本机安装的 XML。
 
 ```powershell
-cd F:\Users\Desktop\DSH_Eplan
+# 先进入本插件的根目录（换机器 / 换盘符时把这一行改成实际路径即可）
+Set-Location "C:\path\to\DSH_Eplan"
+$bundle = (Get-Location).Path          # 下文重建命令都以它为基准
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup.ps1
 ```
 
@@ -79,7 +81,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup.ps1
 补齐 `vendor/eplan-mcp`；重写 `cordis.patch.yml` 中过期的绝对路径；构建 `data\eplan2025.sqlite`
 （约 35 MB / 4 秒）。可选参数：`-Python <路径>`、`-PlatformRoot <路径>`、`-RebuildIndex`、`-SkipIndex`。
 
-然后在 DSH 中通过 plugin manager 安装该目录（本机绝对路径 `F:\Users\Desktop\DSH_Eplan`；换一台机器就是解压后的
+然后在 DSH 中通过 plugin manager 安装该目录（即上面 `$bundle` 指向的插件根目录；换一台机器就是解压后的
 那个目录）。安装完成后
 6 个 MCP 服务器会立即热挂载（本机已验证：`mcp__eplan__*`、`mcp__eplan2025__*`、`mcp__eplan2025guide__*`、
 `mcp__eplan2026__*`、`mcp__eplan2027__*`、`mcp__eecpro__*` 全部在线）；而**技能目录在会话开始时构建**，5 个技能
@@ -130,6 +132,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup.ps1
 
 五套文档索引都只读本地 SQLite，查询不联网。
 
+> **不想自己重建？** 五套已构建好的索引（约 199 MB）不进 git 历史，而是作为
+> [GitHub Release 附件](https://github.com/shangyunqiang1/DSH_Eplan/releases/tag/offline-indexes-v0.2.3)
+> 提供：下载 `DSH_Eplan-offline-indexes.zip`，解压到插件根目录，让五个 `.sqlite` 落在 `data\` 下，
+> 重新加载 MCP 客户端即可开箱即用。下面的命令用于在别的机器上从头重建。
+
 ### 2025：API 参考来自本机 XML，用户手册来自官方帮助站
 
 **（a）API 参考，版本精确，无需联网也不需要下载**
@@ -138,11 +145,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup.ps1
   （12 个文件；`assembly` 名从文件名推断，因为 XML 内的 `<assembly><name>` 通常为空）。
 - 规模：**36,493** 个成员 — type 1,246 / method 8,064 / property 15,287 / field 11,895 / event 1；
   其中 36,478 个有文档文本。按程序集：DataModel 22,823、AF 3,666、MasterData 3,327、Base 1,527 等。
-- 重建：
+- 重建（先 `cd` 到插件根目录；`--xml-dir` 换成本机 EPLAN 的 `Bin` 目录）：
   ```powershell
-  python F:\Users\Desktop\DSH_Eplan\scripts\build-eplan2025-index.py `
+  $bundle = (Get-Location).Path
+  python "$bundle\scripts\build-eplan2025-index.py" `
     --xml-dir "C:\Program Files\EPLAN\Platform\2025.0.3\Bin" `
-    --out F:\Users\Desktop\DSH_Eplan\data\eplan2025.sqlite
+    --out "$bundle\data\eplan2025.sqlite"
   ```
 - 索引结构：`member(id, assembly, kind, name, ns, type_name, member_name, signature, summary, remarks, params, returns, exceptions, url, has_doc)`、
   `meta(key, value)`、FTS5 虚表 `fts(name, member_name, summary, params)`（external content，`bm25` 加权
@@ -173,51 +181,68 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup.ps1
   `Plattform/2023/...` 路径。因此 `guide` 模式只取页名、再按本版本目录重拼 URL
   （`load_sitemap(..., flatten_prefix=…)`），这也是它需要 `--version` 的原因。
 
-### 2026 / 2027 / EEC Pro：一次性爬取官方帮助站
+### 2025 手册 / 2026 / 2027 / EEC Pro：一次性爬取官方帮助站
 
 `scripts/build-help-index.py` 是唯一需要联网的环节：它把 `www.eplan.help` 的公开帮助页抓下来，写入本地
 SQLite + FTS5，之后 MCP 服务器只读本地库。
 
 ```powershell
-$py = Get-Content F:\Users\Desktop\DSH_Eplan\runtime\python-path.txt
+# 先 cd 到插件根目录（见「安装」一节），下面所有路径都由 $bundle 派生
+$bundle = (Get-Location).Path
+$py = Get-Content "$bundle\runtime\python-path.txt"
+
+# 手册页名清单来自官方各版本 sitemap.xml。robots.txt 禁止自动抓 *.xml，
+# 所以每个版本手工下载一次、缓存到本地（该目录已被 .gitignore 忽略）：
+$sitemaps = Join-Path $bundle "_recon\sitemaps"
+New-Item -ItemType Directory -Force -Path $sitemaps | Out-Null
+Invoke-WebRequest -UseBasicParsing -OutFile (Join-Path $sitemaps "plattform2025.xml") `
+  "https://www.eplan.help/en-us/Infoportal/Content/Plattform/2025/sitemap.xml"
+Invoke-WebRequest -UseBasicParsing -OutFile (Join-Path $sitemaps "plattform2026.xml") `
+  "https://www.eplan.help/en-us/Infoportal/Content/Plattform/2026/sitemap.xml"
+Invoke-WebRequest -UseBasicParsing -OutFile (Join-Path $sitemaps "plattform2027.xml") `
+  "https://www.eplan.help/en-us/Infoportal/Content/Plattform/2027/sitemap.xml"
+Invoke-WebRequest -UseBasicParsing -OutFile (Join-Path $sitemaps "eecpro2026.xml") `
+  "https://www.eplan.help/en-us/infoportal/content/eecpro/2026/sitemap.xml"
+
+# 2025 平台用户手册（独立库）
+& $py "$bundle\scripts\build-help-index.py" guide --version 2025 `
+  --sitemap (Join-Path $sitemaps "plattform2025.xml") `
+  --out "$bundle\data\eplan2025-guide.sqlite" --workers 10
 
 # 2026 API 参考：从 webindex.html 取种子，顺着每个类型的 "_members" 页找全部成员页
-& $py F:\Users\Desktop\DSH_Eplan\scripts\build-help-index.py api --version 2026 `
-  --out F:\Users\Desktop\DSH_Eplan\data\eplan2026-help.sqlite --workers 12
+& $py "$bundle\scripts\build-help-index.py" api --version 2026 `
+  --out "$bundle\data\eplan2026-help.sqlite" --workers 12
 # 2026 平台用户手册：并入同一个库（topic 页与 API 页共存，靠 category 区分）
-& $py F:\Users\Desktop\DSH_Eplan\scripts\build-help-index.py guide --version 2026 `
-  --sitemap F:\Users\Desktop\DSH_Eplan\_recon\sitemaps\plattform2026.xml `
-  --out F:\Users\Desktop\DSH_Eplan\data\eplan2026-help.sqlite --workers 10
+& $py "$bundle\scripts\build-help-index.py" guide --version 2026 `
+  --sitemap (Join-Path $sitemaps "plattform2026.xml") `
+  --out "$bundle\data\eplan2026-help.sqlite" --workers 10
 
 # 2027 API 参考 + 平台用户手册
-& $py F:\Users\Desktop\DSH_Eplan\scripts\build-help-index.py api --version 2027 `
-  --out F:\Users\Desktop\DSH_Eplan\data\eplan2027-help.sqlite --workers 12
-& $py F:\Users\Desktop\DSH_Eplan\scripts\build-help-index.py guide --version 2027 `
-  --sitemap F:\Users\Desktop\DSH_Eplan\_recon\sitemaps\plattform2027.xml `
-  --out F:\Users\Desktop\DSH_Eplan\data\eplan2027-help.sqlite --workers 10
+& $py "$bundle\scripts\build-help-index.py" api --version 2027 `
+  --out "$bundle\data\eplan2027-help.sqlite" --workers 12
+& $py "$bundle\scripts\build-help-index.py" guide --version 2027 `
+  --sitemap (Join-Path $sitemaps "plattform2027.xml") `
+  --out "$bundle\data\eplan2027-help.sqlite" --workers 10
 
 # EEC Pro 2026：sitemap.xml 里列出的全部 HTML 页
-& $py F:\Users\Desktop\DSH_Eplan\scripts\build-help-index.py sitemap `
-  --sitemap https://www.eplan.help/en-us/infoportal/content/eecpro/2026/sitemap.xml `
+& $py "$bundle\scripts\build-help-index.py" sitemap `
+  --sitemap (Join-Path $sitemaps "eecpro2026.xml") `
   --prefix  https://eplan.help/en-US/infoportal/Content/EECPro/2026/Content/htm/ `
-  --out F:\Users\Desktop\DSH_Eplan\data\eecpro-help.sqlite --workers 8
+  --out "$bundle\data\eecpro-help.sqlite" --workers 8
 ```
 
-sitemap 先手工下载缓存到 `_recon\sitemaps\`（robots.txt 禁止抓 `*.xml`，所以每个版本只取一次）：
-
-```powershell
-Invoke-WebRequest -UseBasicParsing -OutFile F:\Users\Desktop\DSH_Eplan\_recon\sitemaps\plattform2025.xml `
-  https://www.eplan.help/en-us/Infoportal/Content/Plattform/2025/sitemap.xml
-```
+sitemap 缓存到 `_recon\sitemaps\`（robots.txt 禁止自动抓 `*.xml`，所以每个版本手工下载一次；上面的
+命令已包含下载步骤，新克隆的仓库整段执行即可）。若不想手工下载，也可省略 `guide` 命令的
+`--sitemap`，脚本会自行读取该版本的官方 `sitemap.xml`；2025 API 索引的重建命令见本节（a）。
 
 - 断点续爬：已成功（HTTP 200）的页面不会重复请求，404 也会记住；中断后重跑同一条命令即可补齐。
 - 页表：`page(id, path, url, title, breadcrumb, kind, assembly, type_name, member_name, body, status, fetched_at)`，
   FTS5 虚表 `fts(title, body)`（external content），`meta` 存版本/来源/构建时间/计数；
   `page` 上的 AFTER INSERT/UPDATE/DELETE 触发器和 FTS 同步，爬完还会统一 `rebuild` 一次。
-- 只重建全文索引（不联网，排查「页数正常但搜不到」时用）：
+- 只重建全文索引（不联网，排查「页数正常但搜不到」时用；沿用上一命令块里的 `$bundle` / `$py`）：
   ```powershell
-  & $py F:\Users\Desktop\DSH_Eplan\scripts\build-help-index.py reindex `
-    --out F:\Users\Desktop\DSH_Eplan\data\eplan2026-help.sqlite
+  & $py "$bundle\scripts\build-help-index.py" reindex `
+    --out "$bundle\data\eplan2026-help.sqlite"
   ```
 - 页面正文取自帮助页的正文容器（Innovasys 的 `#i-body-content`、MadCap 的 `#mainbody`），
   每页保留原始 Source URL，回答可精确引用。
@@ -302,7 +327,7 @@ Invoke-WebRequest -UseBasicParsing -OutFile F:\Users\Desktop\DSH_Eplan\_recon\si
 
 ### 索引放在哪里
 
-默认**跟随插件目录**，即 `<插件目录>\data\*.sqlite`（本机为 `F:\Users\Desktop\DSH_Eplan\data\`，五个库共约
+默认**跟随插件目录**，即 `<插件目录>\data\*.sqlite`（例如 `C:\path\to\DSH_Eplan\data\`，五个库共约
 199 MB）。插件目录被 DSH 以 Junction 链接进 profile（`…\profiles\desktop\node_modules\dsh-eplan`），
 所以只要原目录存在，索引就跟着走；整包拷贝到别处同样可用。
 
@@ -329,7 +354,7 @@ EPLAN_DATA_DIR\eplan2025.sqlite …（统一目录）
 ## 目录结构
 
 ```text
-F:\Users\Desktop\DSH_Eplan
+<插件目录>   （即 $bundle 指向的位置）
 ├─ package.json / cordis.patch.yml / index.js / icon.svg / locale/
 ├─ client.js                        设置页（单个路径框）
 ├─ lib\platform.js · lib\routes.js  安装路径探测 / 宿主路由
