@@ -237,5 +237,34 @@ for (const { decl, component } of registrations) {
 }
 
 console.log(missingKeys.size === 0 ? 'ok  every t() key resolves' : '!! missing keys: ' + [...missingKeys].join(', '))
+
+// ── read back what the detail-page section actually says ─────────────────────
+function textOf(node) {
+  if (node === null || node === undefined || node === false) return ''
+  if (typeof node === 'string' || typeof node === 'number') return String(node)
+  if (Array.isArray(node)) return node.map(textOf).join(' ')
+  if (typeof node === 'object') return textOf(node.props && node.props.children)
+  return ''
+}
+
+const sectionReg = registrations.find((r) => r.decl.name === 'plugins.detail.section')
+if (sectionReg) {
+  console.log('--- 版本记录 section text (zh) ---')
+  const { out } = render('dump-zh', sectionReg.component, { subject: ours })
+  console.log(
+    textOf(out)
+      .replace(/\s+/g, ' ')
+      .trim(),
+  )
+  activeLang = 'en'
+  const enOut = render('dump-en', sectionReg.component, { subject: ours }).out
+  console.log('--- version section text (en) ---')
+  console.log(
+    textOf(enOut)
+      .replace(/\s+/g, ' ')
+      .trim(),
+  )
+}
+
 console.log(failures === 0 ? 'RESULT: PASS' : `RESULT: ${failures} failure(s)`)
 process.exitCode = failures === 0 ? 0 : 1
