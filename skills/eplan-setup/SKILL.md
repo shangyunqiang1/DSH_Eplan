@@ -21,7 +21,7 @@ servers plus the `dsh-eplan` host plugin, ships five skills and one system-promp
 | `scripts/build-help-index.py` | The four crawled indexes (`api` / `guide` / `sitemap` / `reindex` modes, resumable) |
 | `server/docs2025/server.py` | 2025 API docs MCP server (stdlib only) |
 | `server/docs/server.py` | 2025 guide / 2026 / 2027 / EEC Pro docs server (stdlib, `--docset`) |
-| `vendor/eplan-mcp/` | eplan-mcp 1.30.0 (MIT, © 2025 Christian D. Lopez) — re-sync, never hand-edit |
+| `vendor/eplan-mcp/` | eplan-mcp v1.3.0 @ `77a78f63` (MIT, © 2025 Christian D. Lopez) — pinned upstream tag, see `PROVENANCE.md`; re-sync, never hand-edit |
 | `runtime/python-path.txt` | Absolute interpreter chosen by setup, read by every launcher |
 | `data/*.sqlite` | `eplan2025` (36,493 members, ~35 MB), `eplan2025-guide` (2,691 pages), `eplan2026-help` (25,024), `eplan2027-help` (26,360), `eecpro-help` (1,971) |
 | `licenses/` | MIT licences for the vendored skills |
@@ -31,9 +31,10 @@ servers plus the `dsh-eplan` host plugin, ships five skills and one system-promp
 - Windows 10/11 x64, EPLAN Electric P8 2025.0.3 at `C:\Program Files\EPLAN\Platform\2025.0.3`.
 - EPLAN remote access: **File → Settings → Workstation → Interfaces → Remote access → "Allow remote
   access via Remote Client"**. Without it `eplan_connect` fails while EPLAN is open and healthy.
-- Python 3.12+ with `mcp` (>=1.8,<2) and `pythonnet`. The default is Bochica's bundled interpreter
-  `C:\Users\DELL\AppData\Local\Programs\bochica\resources\runtime\python\python.exe`, which already has
-  both; `setup.ps1` falls back to the EPLAN_Skills environments, the `py` launcher and PATH.
+- Python 3.12+ (3.13 on this machine) with `mcp` (>=1.19,<2, required by the v1.3.0 tool annotations)
+  and `pythonnet`. The interpreter actually in use is written to `runtime\python-path.txt`
+  (EPLAN_Skills environment); `setup.ps1` also falls back to the `py` launcher, PATH and a legacy
+  Bochica bundled interpreter. vendor is shipped with the plugin — no Bochica install is needed.
 - Network to `www.eplan.help` only while building the 2026 / 2027 / EEC Pro crawls (and the 2025 guide).
 
 ## Install and repair
@@ -43,8 +44,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File F:\Users\Desktop\DSH_Eplan\s
 ```
 
 Options `-Python <path>`, `-RebuildIndex`, `-SkipIndex`. The script normalises the `.cmd` launchers to
-CRLF, restores `vendor/eplan-mcp` from the Bochica runtime if missing, validates the interpreter
-(`import sys, mcp, clr`), writes `runtime\python-path.txt`, rewrites stale bundle paths in
+CRLF, verifies the pinned `vendor/eplan-mcp` is present (fails loudly instead of copying an
+unpinned Bochica runtime), validates the interpreter (`import sys, mcp, clr`), writes
+`runtime\python-path.txt`, rewrites stale bundle paths in
 `cordis.patch.yml`, then builds the 2025 index (~4 s) unless told to skip.
 
 Then (re)install through DSH's plugin manager with the absolute package directory

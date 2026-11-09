@@ -23,3 +23,8 @@ __pycache__/
 .DS_Store
 Thumbs.db
 *.log
+
+# vendored eplan-mcp runtime scratch (created by the server at run time;
+# the two .gitkeep files are shipped as empty placeholders upstream)
+vendor/eplan-mcp/eplan-p8-mcp-server/mcp_server/scripts/generated/
+vendor/eplan-mcp/eplan-p8-mcp-server/mcp_server/scripts/results/

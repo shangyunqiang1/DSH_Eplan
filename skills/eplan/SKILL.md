@@ -13,6 +13,7 @@ Everything here reaches it through the `eplan` MCP server, exposed as `mcp__epla
 | The request is about | Load |
 | --- | --- |
 | the running program: connect, project, pages, parts, exports, an action | this skill |
+| a parts database in bulk: XML export/import, import modes, Data Portal downloads | `eplan-scripting` → `references/parts-database.md` |
 | C# code: scripts, add-ins, Remote Client apps | `eplan-scripting` |
 | a documented name or a dialog: an API member, a menu path, "what does this option do" | `eplan-docs` |
 | EEC Pro: typicals, formulas, EOX, Job Server | `eec-pro-development` |

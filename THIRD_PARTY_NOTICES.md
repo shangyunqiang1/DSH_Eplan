@@ -5,25 +5,40 @@ third-party work. Upstream licences are reproduced in `licenses/`; nothing below
 
 ## eplan-mcp — `vendor/eplan-mcp/`
 
-- Source: <https://github.com/Canary-ECAD/eplan-mcp> (version 1.30.0, taken from the Bochica
-  runtime during setup).
+- Source: <https://github.com/Canary-ECAD/eplan-mcp>, tag **v1.3.0**, commit
+  `77a78f6315992d8e50745de87f221c7e53a08a53` (2026-11-06). The vendored files are the
+  `eplan-p8-mcp-server/mcp_server/` subtree plus the server's top-level docs; see
+  `vendor/eplan-mcp/PROVENANCE.md` for the exact file list and verification method.
+- The earlier "1.30.0" label in this bundle was **incorrect**: 1.30.0 is the version of the
+  `mcp` Python SDK, not of eplan-mcp. Previous snapshots were an untagged pre-v1.0.0 commit
+  (`d207fc72908b763cf38eab6dd504e0b6886d98be`); this update pins the upstream tag.
 - Licence: MIT, Copyright (c) 2025 Christian D. Lopez — `vendor/eplan-mcp/LICENSE`.
-- Redistributed unmodified apart from packaging.
+- Redistributed unmodified apart from packaging (excluding `scripts/generated/` and
+  `scripts/results/` runtime scratch, which are untracked).
 
 ## eplan-scripting-skill — `skills/eplan-scripting/`
 
-- Source: <https://github.com/Canary-ECAD/eplan-scripting-skill>
+- Source: <https://github.com/Canary-ECAD/eplan-scripting-skill>, commit
+  `c98ec267df993cb52708836f3ec4b295ea55727d` (2026-11-06; adds
+  `references/parts-database.md` — S15 parts-database knowledge).
 - Licence: MIT, Copyright (c) 2025 Christian D. Lopez —
   `licenses/eplan-scripting-skill-LICENSE.txt`.
 - Modified: a `DSH_Eplan deployment notes` section was appended to `SKILL.md` to map this plugin's
-  tool names; the reference files are verbatim.
+  tool names; the nine original reference files are verbatim, plus the new
+  `references/parts-database.md` taken verbatim from the pinned commit. The upstream router
+  skill is not vendored; its parts-database routing hint was added to `skills/eplan/SKILL.md`.
 
 ## eec-pro-skill — `skills/eec-pro-development/`
 
-- Source: <https://github.com/Canary-ECAD/eec-pro-skill>
+- Source: <https://github.com/Canary-ECAD/eec-pro-skill>, commit
+  `9f89fefc05f78984a4750851e80e9e423918e4bf` (unchanged since the first bundle).
 - Licence: MIT, Copyright (c) 2025 Christian D. Lopez — `licenses/eec-pro-skill-LICENSE.txt`.
-- Modified: a `DSH_Eplan deployment notes` section was appended to `SKILL.md`; the reference files
-  are verbatim.
+- Modified: `SKILL.md` carries a short DSH deployment note (the eplan-rag endpoints are replaced by
+  local MCP servers); `references/doc-categories.md` has an added local-index note at the top;
+  the other three reference files are verbatim. Note: `references/job-server.md:3` mentions
+  "EEC Pro 2025.3 workers" — that is the upstream author's field-note provenance, kept verbatim;
+  it is not the version of this bundle's locally crawled help index (EEC Pro 2026). Do not
+  "correct" that line, or the file stops being byte-identical to the pinned upstream commit.
 
 ## Bochica — architecture reference
 
@@ -35,10 +50,14 @@ third-party work. Upstream licences are reproduced in `licenses/`; nothing below
 
 - Source: <https://github.com/Canary-ECAD/eplan-cloudflare-rags>, MIT, Copyright (c) 2025
   Christian D. Lopez.
-- Not redistributed and **not contacted at runtime**. The hosted endpoints it publishes
+- Not redistributed. The hosted endpoints it publishes
   (`rag2026.covaga.xyz`, `rag2027.covaga.xyz`, `rageecpro.covaga.xyz`) were used only while
-  bootstrapping this plugin; they were replaced by locally built indexes. Probe scripts under
-  `_recon/` may still reference those URLs and are development artifacts, not part of the plugin.
+  bootstrapping this plugin; they were replaced by locally built indexes and are **not contacted
+  by the five documentation MCP servers**, which read only local SQLite files. Two caveats about
+  shipped-but-not-mounted upstream code: the optional `symbol_search.py` extension (only loaded
+  when `EPLAN_MCP_EXTENSIONS` is set) defaults to a live `symbols.covaga.xyz` endpoint, and
+  `scripts/build-help-index.py` / `_recon/` probe scripts may reference those URLs; all are
+  development/off-by-default artifacts, not part of the runtime path.
 
 ## EPLAN documentation content
 

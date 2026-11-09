@@ -22,7 +22,7 @@
 
 | MCP 服务器 | 工具前缀 | 说明 |
 | --- | --- | --- |
-| `eplan` | `mcp__eplan__*` | 本地 EPLAN 自动化。eplan-mcp 1.30.0（与 Bochica 同源），discovery 模式只发布 13 个元工具；约 180 个类型化工具通过 `eplan_tools_call` 调用，约 1150 个原始 action 通过 `eplan_action_run` 调用。通过 Remote Client 驱动正在运行的 EPLAN。 |
+| `eplan` | `mcp__eplan__*` | 本地 EPLAN 自动化。eplan-mcp v1.3.0（上游 tag，commit `77a78f63`；与 Bochica 同源），discovery 模式发布 15 个工具（12 个连接/动作目录核心 + 3 个发现元工具，含 `eplan_list_dialogs` / `eplan_click_dialog_button` 用于 EPLAN 被弹窗卡住时）；约 236 个隐藏类型化工具（full 模式共 248 个）通过 `eplan_tools_call` 调用，约 1150 个原始 action 通过 `eplan_action_run` 调用。每个工具带 MCP 注解与 `canary-ecad/eplan` 安全事实。通过 Remote Client 驱动正在运行的 EPLAN。 |
 | `eplan2025` | `mcp__eplan2025__*` | EPLAN P8 2025.0.3 的 .NET **API 离线参考**（36,493 个成员，全文检索 + 按成员/类型查看，带 Source URL）。**纯本地**。 |
 | `eplan2025guide` | `mcp__eplan2025guide__*` | P8 2025 **平台用户手册**离线索引（2,691 页：对话框/Settings、命令调用路径、工艺流程、提示信息；`_search` / `_get` / `_stats`）。**纯本地**。 |
 | `eplan2026` | `mcp__eplan2026__*` | 本地爬取的 P8 2026 API 参考 + 平台帮助（SQLite FTS5，`category` 区分 API/User Guide）。**纯本地**。 |
@@ -48,7 +48,7 @@ EEC Pro 进 `eec-pro-development`，插件本身坏了进 `eplan-setup`。正文
 
 | Bochica | 本插件 |
 | --- | --- |
-| `eplan`（stdio，`EPLAN_MCP_MODE=full`，217 工具） | `eplan`（stdio，默认 `discovery`，13 元工具 + `tools_call`），需要时可切回 full |
+| `eplan`（stdio，`EPLAN_MCP_MODE=full`，248 工具） | `eplan`（stdio，默认 `discovery`，15 工具 = 12 核心 + 3 元工具），需要时可切回 full |
 | `eplan-docs-2027`（https://rag2027.covaga.xyz/mcp，必选） | `eplan2027`（**改为本地爬取**，同一套 2027 帮助页） |
 | `eplan-docs-2026`（https://rag2026.covaga.xyz/mcp，可选） | `eplan2026`（**改为本地爬取**，同一套 2026 帮助页） |
 | `eec-pro-docs`（https://rageecpro.covaga.xyz/mcp，可选） | `eecpro`（**改为本地爬取**，EEC Pro 2026 官方帮助） |
@@ -62,9 +62,10 @@ EEC Pro 进 `eec-pro-development`，插件本身坏了进 `eplan-setup`。正文
 
 1. 已安装 EPLAN Electric P8 2025（本机为 `C:\Program Files\EPLAN\Platform\2025.0.3`），并在
    **文件 → 设置 → 工作站 → 接口 → 远程访问** 勾选「允许通过 Remote Client 远程访问」。
-2. Python 3.12+，具备 `mcp`（>=1.8,<2）与 `pythonnet`。默认复用 Bochica 内置解释器
-   `C:\Users\DELL\AppData\Local\Programs\bochica\resources\runtime\python\python.exe`，
-   setup 也会回退到 EPLAN_Skills 环境、`py` 启动器和 PATH。
+2. Python 3.12+（本机为 3.13），具备 `mcp`（>=1.19,<2，v1.3.0 的 tool annotations 需要）与 `pythonnet`。
+   默认复用 EPLAN_Skills 环境（实际解释器路径由 `setup.ps1` 探测并写入 `runtime\python-path.txt`），
+   也可用 `-Python <路径>` 指定；setup 还会回退到 Bochica 内置解释器、`py` 启动器和 PATH。
+   **vendor 已随插件入库，不依赖 Bochica 安装目录。**
 3. DeepSeek Harness（desktop profile）。
 4. 只在首次构建/更新 2025 平台手册与 2026、2027、EEC Pro 本地索引时需要能访问 `www.eplan.help`；
    2025 的 API 索引完全来自本机安装的 XML。
@@ -77,8 +78,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup.ps1
 ```
 
 `setup.ps1` 会：校验并写入 `runtime\python-path.txt`；定位 EPLAN 安装路径并写入
-`runtime\eplan-platform-root.txt`（已经选过就保留用户的选择）；把 `.cmd` 启动器规范为 CRLF；从 Bochica 运行时
-补齐 `vendor/eplan-mcp`；重写 `cordis.patch.yml` 中过期的绝对路径；构建 `data\eplan2025.sqlite`
+`runtime\eplan-platform-root.txt`（已经选过就保留用户的选择）；把 `.cmd` 启动器规范为 CRLF；
+校验 `vendor/eplan-mcp` 完整性（仅当目录缺失时才从 Bochica 运行时补齐，正常安装不会触发）；
+重写 `cordis.patch.yml` 中过期的绝对路径；构建 `data\eplan2025.sqlite`
 （约 35 MB / 4 秒）。可选参数：`-Python <路径>`、`-PlatformRoot <路径>`、`-RebuildIndex`、`-SkipIndex`。
 
 然后在 DSH 中通过 plugin manager 安装该目录（即上面 `$bundle` 指向的插件根目录；换一台机器就是解压后的
@@ -298,7 +300,7 @@ sitemap 缓存到 `_recon\sitemaps\`（robots.txt 禁止自动抓 `*.xml`，所�
 - `dsh-eplan` — 主插件，注入系统提示。
 - `eplan-mcp`（`dsh-eplan/mcp/eplan`，显示为 **EPLAN 远程连接**）— stdio，经 `scripts\launch-eplan-mcp.cmd` 启动，
   `cwd` 为 `vendor\eplan-mcp\eplan-p8-mcp-server\mcp_server`。默认 `EPLAN_MCP_MODE=discovery`；
-  改成 `full` 可获得 217 个独立工具（每个请求都要携带全部 schema，token 成本高）。
+  改成 `full` 可获得 248 个独立工具（每个请求都要携带全部 schema，token 成本高）。
 - `eplan-docs-2025`（`dsh-eplan/mcp/eplan2025`，**P8 2025 · API 参考**）— stdio，经 `scripts\launch-docs2025.cmd`。
 - `eplan-guide-2025`（`dsh-eplan/mcp/eplan2025guide`，**P8 2025 · 平台帮助**）— stdio，经 `scripts\launch-docs2025guide.cmd`。
 - `eplan-docs-2026` / `eplan-docs-2027`（**P8 2026 · 文档** / **P8 2027 · 文档**）— stdio，分别经 `scripts\launch-docs2026.cmd`、
@@ -347,7 +349,7 @@ EPLAN_DATA_DIR\eplan2025.sqlite …（统一目录）
 
 - 只读优先：先 `eplan_status` / `eplan_get_current_project` / 搜索 / 导出到临时目录，不要为了「看看」打开或关闭用户的项目。
 - 第一次修改类操作前先 `eplan_backup_project`，或确认用户已有备份；压缩、还原、升级同样按修改处理。
-- 删除/清理类动作（delete、remove、purge、reorganize、discard、erase、destroy、wipe）必须在对话中明确批准并点名项目。
+- 删除/清理类动作（delete、remove、purge、reorganize、discard、erase、destroy、wipe）必须在对话中明确批准并点名项目。v1.3.0 起工具自带 `canary-ecad/eplan` 注解（`destructive` / `changesProject` / `changesEplan`）；对 `eplan_live_batch`、`eplan_live_remove_placement`、`eplan_live_copy_pages_to_structure`、`eplan_remove_unused_user_properties`、`eplan_set_parts_data_source`、`eplan_restore_masterdata`、`eplan_partsmanagement_import`（mode 3 会替换主数据）、`eplan_dataportal_*` 一律先备份并获批。
 - 动作在 `QuietModes.ShowNoDialogs` 下执行：返回 `{"success": false}` 是正常返回值而非异常，改完用只读查询复核。
 - 文档检索全部本地：客户名、项目路径、物料号都可以放心作为检索词，不会离开本机。
 
@@ -370,13 +372,15 @@ EPLAN_DATA_DIR\eplan2025.sqlite …（统一目录）
 ├─ data\eplan2026-help.sqlite       2026 API + 平台帮助（72.2 MB / 25,024 页）
 ├─ data\eplan2027-help.sqlite       2027 API + 平台帮助（75.2 MB / 26,360 页）
 ├─ data\eecpro-help.sqlite          EEC Pro 2026 帮助爬取索引（4.3 MB / 1,971 页）
+│   （data\*.sqlite 与 _recon\ 均被 .gitignore 排除：数据库随 Release 附件 offline-indexes 分发，
+│    新克隆的仓库需按「安装 / 重建索引」一节生成，不随源码提交）
 ├─ runtime\python-path.txt          setup 解析出的 Python 路径
 ├─ runtime\eplan-platform-root.txt  用户选的 EPLAN 安装根目录（设置页写入；可选，缺失则自动识别）
-├─ vendor\eplan-mcp\                eplan-mcp 1.30.0（MIT）
+├─ vendor\eplan-mcp\                eplan-mcp v1.3.0 @ 77a78f63（MIT；来源见 vendor\eplan-mcp\PROVENANCE.md）
 ├─ skills\                          eplan · eplan-scripting · eplan-docs · eec-pro-development · eplan-setup
 ├─ licenses\                        MIT 许可证副本
 ├─ README.md / THIRD_PARTY_NOTICES.md
-└─ _recon\                          开发期探针、爬取日志与 sitemap 缓存（可删除）
+└─ _recon\                          开发期探针/爬取日志（.gitignore 排除，不随插件包分发，可删除）
 ```
 
 ## 排错
@@ -392,7 +396,8 @@ EPLAN_DATA_DIR\eplan2025.sqlite …（统一目录）
 | 设置页显示「未检测到」但 EPLAN 确实装了 | 手动粘贴路径，或用浏览器按钮从盘符逐级进去；也确认安装目录下确实有 `<版本>\Bin\Eplan.EplApi.RemoteClientu.dll`。 |
 | `ModuleNotFoundError: mcp` / `clr` | 解释器不对。`setup.ps1 -Python <带 mcp 和 pythonnet 的 python>`。 |
 | `eplan_connect` 报 gRPC "failed to connect to all addresses" | 未开远程访问 / EPLAN 没启动 / 端口不是 49152。让用户用 `netstat -ano | findstr LISTENING` 对照 EPLAN.exe 的 PID 查真实端口。 |
-| 连到了错误的 EPLAN 版本 | 一个服务器进程只能加载一个大版本，需重启 DSH 后 `eplan_connect({version:"2025"})`。 |
+| 连到了错误的 EPLAN 版本 / `eplan_connect` 回报 2026 | 只装 2025 时自动检测仍可能报 2026：显式 `eplan_connect({version:"2025"})` 再让服务器加载 DLL；一个进程只能加载一个大版本，换版本要重启 DSH。v1.3.0 的 2027 专用工具仅对 2027 生效。 |
+| EPLAN 突然不响应、两分钟后断连 | 2025 的 `eplan_dataportal_add_to_download_list` 会弹出 Data Portal 模态窗口且脚本不返回：让用户在该窗口下载并关闭后再继续；期间不要重复排队。 |
 | `eplan2025_search` 没结果 / stats 找不到库 | 重建索引；确认 `--xml-dir` 指向已安装平台的 `Bin`。 |
 | 查界面/流程找不到，但 API 能查到 | 用错了服务：改用 `eplan2025_guide_search`（2025 手册）或 2026/2027 的 `category:"User Guide"`。 |
 | 2025 手册搜不到，但 `eplan2025_guide_stats` 页数正常 | 全文索引与页表不同步：`build-help-index.py reindex --out data\eplan2025-guide.sqlite`。 |

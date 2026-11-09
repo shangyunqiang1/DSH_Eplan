@@ -4,9 +4,10 @@
 #   powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
 #   powershell -ExecutionPolicy Bypass -File scripts\setup.ps1 -RebuildIndex
 #
-# The plugin needs a Python 3.9+ interpreter that has `mcp` and `pythonnet`
-# (`clr`) for the EPLAN automation server. Bochica's bundled runtime is the
-# default; a venv with `pip install -r vendor\eplan-mcp\...\requirements.txt`
+# The plugin needs a Python 3.12+ interpreter (3.13 on this machine) that has
+# `mcp` (>=1.19,<2 — eplan-mcp v1.3.0 tool annotations need it) and `pythonnet`
+# (`clr`) for the EPLAN automation server. The EPLAN_Skills environment is
+# preferred; a venv with `pip install -r vendor\eplan-mcp\...\requirements.txt`
 # works too. The documentation server itself only needs the standard library.
 
 [CmdletBinding()]
@@ -37,17 +38,17 @@ Get-ChildItem (Join-Path $Root 'scripts') -Filter '*.cmd' -ErrorAction SilentlyC
 }
 
 # --- 2. Vendor check --------------------------------------------------------
+# The vendored server is pinned to eplan-mcp v1.3.0 (see
+# vendor\eplan-mcp\PROVENANCE.md). A Bochica self-update can change its own
+# runtime, so never silently copy an unpinned version over a missing one: if the
+# bundled server is gone, fail loudly with the exact restore command instead.
 if (-not (Test-Path $VendorServer)) {
     $fallback = Join-Path $env:LOCALAPPDATA 'Programs\bochica\resources\runtime\eplan-mcp'
     if (Test-Path (Join-Path $fallback 'eplan-p8-mcp-server\mcp_server\server.py')) {
-        Write-Host "Vendor missing; copying eplan-mcp from $fallback"
-        $dest = Join-Path $Root 'vendor\eplan-mcp'
-        New-Item -ItemType Directory -Force -Path (Split-Path $dest) | Out-Null
-        robocopy $fallback $dest /E /NFL /NDL /NJH /NJS /NP | Out-Null
+        Write-Warning "Bundled eplan-mcp v1.3.0 is missing. A legacy Bochica runtime exists at $fallback, but it is NOT pinned and may be a different version — refusing to copy it automatically."
+        Write-Warning "Restore the pinned snapshot: re-install the plugin package (vendor/eplan-mcp is shipped with it), or re-sync from upstream tag v1.3.0 / commit 77a78f63 per PROVENANCE.md."
     }
-    if (-not (Test-Path $VendorServer)) {
-        throw "Bundled eplan-mcp server not found at $VendorServer. Re-run the installer or restore vendor\eplan-mcp."
-    }
+    throw "Bundled eplan-mcp v1.3.0 server not found at $VendorServer. Re-install the plugin package or restore vendor\eplan-mcp from the pinned upstream commit; do not substitute an unpinned Bochica runtime."
 }
 
 # --- 3. Resolve Python ------------------------------------------------------
@@ -60,12 +61,14 @@ function Test-EplanPython([string]$Exe) {
 $candidates = [System.Collections.Generic.List[string]]::new()
 if ($Python) { $candidates.Add($Python) }
 if ($env:EPLAN_DSH_PYTHON) { $candidates.Add($env:EPLAN_DSH_PYTHON) }
-$candidates.Add((Join-Path $env:LOCALAPPDATA 'Programs\bochica\resources\runtime\python\python.exe'))
+# Prefer the EPLAN_Skills runtime (the interpreter this bundle was set up with).
 Get-ChildItem (Join-Path $env:LOCALAPPDATA 'EPLAN_Skills\environments') -Directory -ErrorAction SilentlyContinue |
     ForEach-Object {
         $candidates.Add((Join-Path $_.FullName 'Scripts\python.exe'))
         $candidates.Add((Join-Path $_.FullName 'python.exe'))
     }
+# Legacy Bochica bundled interpreter, kept only as a last-resort fallback.
+$candidates.Add((Join-Path $env:LOCALAPPDATA 'Programs\bochica\resources\runtime\python\python.exe'))
 try {
     $pyLauncher = & py -3 -c "import sys;print(sys.executable)" 2>$null
     if ($pyLauncher) { $candidates.Add($pyLauncher.Trim()) }
@@ -90,7 +93,7 @@ if (-not $resolved) {
     }
 }
 if (-not $resolved) {
-    throw "No Python interpreter found. Install Python 3.9+, or set EPLAN_DSH_PYTHON to a Python that has 'mcp' and 'pythonnet' installed (e.g. Bochica's bundled runtime)."
+    throw "No Python interpreter found. Install Python 3.12+, or set EPLAN_DSH_PYTHON to a Python that has 'mcp' (>=1.19,<2) and 'pythonnet' installed."
 }
 
 New-Item -ItemType Directory -Force -Path $RuntimeDir | Out-Null

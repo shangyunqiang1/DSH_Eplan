@@ -4,7 +4,8 @@
 #   1. dsh-eplan        - Host plugin: always-on EPLAN system-prompt guidance.
 #   2. eplan            - Local EPLAN automation MCP server (bundled eplan-mcp,
 #                         discovery mode by default; set EPLAN_MCP_MODE=full in
-#                         the env block below for the ~217 direct tools).
+#                         the env block below for the ~248 direct tools;
+#                         discovery publishes 15 core/meta tools).
 #   3. eplan2025        - Offline, version-exact EPLAN P8 2025 .NET API reference
 #                         built from the installed EPLAN XML docs.
 #   4. eplan2025guide   - Offline P8 2025 platform help (user guide, dialogs),

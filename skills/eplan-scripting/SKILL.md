@@ -40,6 +40,12 @@ load on demand with zero refusals. A failed `using` never means the namespace is
   `Symbol(lib, int)` by index must `continue`, never `break`, on a construction miss (SymbolIds are
   sparse), and a symbol's identity comes from `Symbol.Properties.SYMB_DESC`/`FUNC_CATEGORY`, never its
   short name or IEC-letter prefix.
+- **`references/parts-database.md`** — The parts database in bulk: property numbers and API names
+  (22009 `ARTICLE_NOTE` is the dialog's "Description", not `ARTICLE_DESCR1`), the `XPamExportXml` format
+  (empty properties left out, `xx_XX@text;` multilanguage values, `$(MD_MACROS)` paths), import modes 0–3
+  and how a mode 1 update leaves everything else alone, the `Remove*` methods that delete with no undo,
+  and the Data Portal: the add-in's actions per version (`EDPCloudAddPartsToBasketAction`, `PARTNR<i>` +
+  `PARTID<i>`), what a download writes and skips, and the documented web API.
 - **`references/eec-typicals.md`** — building a project from an EEC One "typical" workbook without EEC:
   reading the sheet (already condition-filtered), inserting page/window macros through `Insert`,
   renaming pages to the sheet's structure with `PagePropertyList`, and the page-index collision on the
