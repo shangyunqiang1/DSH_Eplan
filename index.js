@@ -17,6 +17,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createRootStore, registerRoutes } from './lib/routes.js'
+import { registerVersionRoutes } from './lib/versions.js'
 
 export const name = 'dsh-eplan'
 
@@ -83,6 +84,7 @@ export function apply(ctx, config) {
   // duplicate path throws on the next activation.
   ctx.inject(['webServer'], (webCtx) => {
     webCtx.effect(() => registerRoutes(webCtx.webServer, store), 'dsh-eplan: install path routes')
+    webCtx.effect(() => registerVersionRoutes(webCtx.webServer, root), 'dsh-eplan: version routes')
   })
 
   // Keep the resolved Python path (written by setup.ps1) in the diagnostics the

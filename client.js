@@ -55,6 +55,28 @@ window.__ModuleLoader__.load({
         "source.env": "环境变量 EPLAN_PLATFORM_ROOT",
         "source.registry": "注册表",
         "source.common": "默认位置",
+        "version.section": "版本记录",
+        "version.description":
+          "当前安装版本与发布记录。点「检查更新」从 GitHub 读取最新清单；检测到新版本时可直接更新。",
+        "version.current": "当前版本",
+        "version.latest": "最新版本",
+        "version.currentTag": "当前",
+        "version.check": "检查更新",
+        "version.update": "更新到 {version}",
+        "version.updating": "正在更新…",
+        "version.checking": "正在检查…",
+        "version.badge": "可更新",
+        "version.badgeTo": "可更新到 {version}",
+        "version.uptodate": "已是最新",
+        "version.releases": "发布记录",
+        "version.releasesLink": "查看全部 Release",
+        "version.source.remote": "已检查 GitHub 上的最新清单",
+        "version.source.offline": "无法连接 GitHub，显示本地记录",
+        "version.source.local": "本地记录",
+        "version.reload": "更新后请在「插件」页停用再启用 dsh-eplan（或重新加载）使新版本生效。",
+        "version.error": "版本信息不可用：{msg}",
+        "version.updateFailed": "更新失败：{msg}",
+        "version.noReleases": "暂无发布记录。",
       },
       en: {
         "settings.title": "EPLAN install path",
@@ -90,6 +112,28 @@ window.__ModuleLoader__.load({
         "source.env": "EPLAN_PLATFORM_ROOT",
         "source.registry": "registry",
         "source.common": "default location",
+        "version.section": "Version records",
+        "version.description":
+          "Installed version and release history. Check for updates reads the latest manifest from GitHub; a newer release can be applied directly.",
+        "version.current": "Installed",
+        "version.latest": "Latest",
+        "version.currentTag": "current",
+        "version.check": "Check for updates",
+        "version.update": "Update to {version}",
+        "version.updating": "Updating…",
+        "version.checking": "Checking…",
+        "version.badge": "Update available",
+        "version.badgeTo": "Update to {version}",
+        "version.uptodate": "Up to date",
+        "version.releases": "Release history",
+        "version.releasesLink": "View all releases",
+        "version.source.remote": "Checked the latest manifest on GitHub",
+        "version.source.offline": "GitHub unreachable — showing local records",
+        "version.source.local": "Local records",
+        "version.reload": "After updating, disable and re-enable dsh-eplan on the Plugins page (or reload) to apply the new version.",
+        "version.error": "Version information unavailable: {msg}",
+        "version.updateFailed": "Update failed: {msg}",
+        "version.noReleases": "No release records yet.",
       },
     };
 
@@ -515,6 +559,247 @@ window.__ModuleLoader__.load({
       );
     }
 
+    // ── Version records & self-update ───────────────────────────────────────
+    // This bundle is installed with pnpm's `link:` protocol, so the built-in
+    // plugin manager has no npm `installTarget` and deliberately offers it no
+    // update button. We contribute the missing UI through the host's three
+    // detail-page list slots, all of which receive { kind, pkg } as `subject`.
+    // One shared store keeps the three registrations on a single fetch.
+    function createVersionStore() {
+      let state = {
+        data: null,
+        error: null,
+        checking: false,
+        updating: false,
+        updateResult: null,
+        loaded: false,
+      };
+      const listeners = new Set();
+      const getSnapshot = () => state;
+      const subscribe = (fn) => {
+        listeners.add(fn);
+        return () => listeners.delete(fn);
+      };
+      const set = (patch) => {
+        state = { ...state, ...patch };
+        listeners.forEach((fn) => fn());
+      };
+      const load = (force) => {
+        if (state.checking) return;
+        set({ checking: true, error: null });
+        postJson("/api-eplan/version", { force: Boolean(force) })
+          .then((res) => {
+            if (res.ok) set({ checking: false, data: res.data, loaded: true, error: null });
+            else set({ checking: false, loaded: true, error: (res.data && res.data.error) || String(res.status) });
+          })
+          .catch((err) => set({ checking: false, loaded: true, error: errorText(err) }));
+      };
+      const update = () => {
+        if (state.updating) return;
+        set({ updating: true, updateResult: null });
+        postJson("/api-eplan/version/update", {})
+          .then((res) => {
+            set({
+              updating: false,
+              updateResult: res.ok
+                ? res.data
+                : { ok: false, error: (res.data && res.data.error) || String(res.status) },
+            });
+            load(true);
+          })
+          .catch((err) => set({ updating: false, updateResult: { ok: false, error: errorText(err) } }));
+      };
+      return { getSnapshot, subscribe, load, update };
+    }
+
+    const versionStore = createVersionStore();
+
+    function useVersion() {
+      const t = useTranslate();
+      const [snap, setSnap] = useState(versionStore.getSnapshot);
+      useEffect(() => versionStore.subscribe(() => setSnap(versionStore.getSnapshot())), []);
+      useEffect(() => {
+        if (!snap.loaded && !snap.checking) versionStore.load(false);
+      }, []);
+      return { t, ...snap };
+    }
+
+    const isOurBundle = (subject) =>
+      subject && subject.kind === "bundle" && subject.pkg && subject.pkg.name === "dsh-eplan";
+
+    function versionTag(text, tone) {
+      const color = tone === "info" ? COLORS.accent : COLORS.dim;
+      return h(
+        "span",
+        {
+          style: {
+            display: "inline-block",
+            padding: "1px 8px",
+            borderRadius: "999px",
+            border: "1px solid " + (tone === "info" ? COLORS.accent : COLORS.border),
+            background: COLORS.field,
+            color: color,
+            fontSize: "12px",
+            whiteSpace: "nowrap",
+          },
+        },
+        text,
+      );
+    }
+
+    /** Detail-page badge: only the "update available" tag; the host already draws vX.Y.Z. */
+    function VersionBadge(props) {
+      const { t, data } = useVersion();
+      const subject = props && props.subject;
+      if (!isOurBundle(subject)) return null;
+      if (!data || !data.updateAvailable) return null;
+      return versionTag(t("version.badgeTo", { version: data.latest }), "info");
+    }
+
+    /** Detail-page head action: "Update to X" (and a check control when idle). */
+    function VersionAction(props) {
+      const { t, data, checking, updating } = useVersion();
+      const subject = props && props.subject;
+      if (!isOurBundle(subject)) return null;
+      if (!data || !data.updateAvailable) return null;
+      return button(t("version.update", { version: data.latest }), () => versionStore.update(), {
+        primary: true,
+        disabled: checking || updating,
+      });
+    }
+
+    function releaseNote(release, lang, t) {
+      const notes = release.notes || {};
+      return notes[lang] || notes.zh || notes.en || t("version.noReleases");
+    }
+
+    /** Detail-page section: version summary, controls and the release ledger. */
+    function VersionSection(props) {
+      const { t, data, error, checking, updating, updateResult } = useVersion();
+      const subject = props && props.subject;
+      if (!isOurBundle(subject)) return null;
+      const lang = t("version.section") === "版本记录" ? "zh" : "en";
+
+      const body = [];
+      body.push(
+        h("div", { style: { fontSize: "15px", fontWeight: 600, color: COLORS.text } }, t("version.section")),
+        h("div", { style: { fontSize: "12.5px", color: COLORS.dim, lineHeight: "1.6" } }, t("version.description")),
+      );
+
+      if (error) {
+        body.push(h("div", { style: { fontSize: "12px", color: COLORS.error } }, t("version.error", { msg: error })));
+      }
+
+      if (data) {
+        const sourceKey =
+          data.source === "remote"
+            ? "version.source.remote"
+            : data.source === "offline"
+              ? "version.source.offline"
+              : "version.source.local";
+        body.push(
+          h(
+            "div",
+            { style: { display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" } },
+            h("span", { style: { fontSize: "12.5px", color: COLORS.dim } }, t("version.current") + ": "),
+            versionTag("v" + data.current, "info"),
+            h("span", { style: { fontSize: "12.5px", color: COLORS.dim } }, t("version.latest") + ": "),
+            versionTag("v" + data.latest, data.updateAvailable ? "info" : "neutral"),
+            data.updateAvailable
+              ? versionTag(t("version.badgeTo", { version: data.latest }), "info")
+              : versionTag(t("version.uptodate"), "neutral"),
+          ),
+          h("div", { style: { fontSize: "11.5px", color: COLORS.dimmer } }, t(sourceKey)),
+        );
+      }
+
+      body.push(
+        h(
+          "div",
+          { style: { display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" } },
+          button(checking ? t("version.checking") : t("version.check"), () => versionStore.load(true), {
+            disabled: checking || updating,
+          }),
+          data && data.updateAvailable
+            ? button(updating ? t("version.updating") : t("version.update", { version: data.latest }), () => versionStore.update(), {
+                primary: true,
+                disabled: checking || updating,
+              })
+            : null,
+        ),
+      );
+
+      if (updateResult) {
+        body.push(
+          h(
+            "div",
+            { style: { fontSize: "12px", color: updateResult.ok ? COLORS.success : COLORS.error } },
+            updateResult.ok
+              ? updateResult.message || t("version.reload")
+              : t("version.updateFailed", { msg: updateResult.error || "unknown" }),
+          ),
+        );
+        if (updateResult.ok && updateResult.needsReload) {
+          body.push(h("div", { style: { fontSize: "11.5px", color: COLORS.dimmer, lineHeight: "1.6" } }, t("version.reload")));
+        }
+      }
+
+      if (data && data.releases && data.releases.length) {
+        body.push(
+          h("div", { style: { fontSize: "13px", fontWeight: 600, color: COLORS.text, marginTop: "4px" } }, t("version.releases")),
+          h(
+            "div",
+            { style: { display: "flex", flexDirection: "column", gap: "8px" } },
+            data.releases.map((rel) =>
+              row(
+                rel.version,
+                "v" + rel.version + (rel.date ? " · " + rel.date : ""),
+                releaseNote(rel, lang, t),
+                rel.version === data.current ? versionTag(t("version.currentTag"), "info") : null,
+                null,
+                rel.version === data.current,
+              ),
+            ),
+          ),
+        );
+      } else if (data) {
+        body.push(h("div", { style: { fontSize: "12px", color: COLORS.dimmer } }, t("version.noReleases")));
+      }
+
+      if (data && data.releasesUrl) {
+        body.push(
+          h(
+            "a",
+            {
+              href: data.releasesUrl,
+              target: "_blank",
+              rel: "noreferrer",
+              style: { fontSize: "12px", color: COLORS.accent, textDecoration: "none", alignSelf: "flex-start" },
+            },
+            t("version.releasesLink") + " ↗",
+          ),
+        );
+      }
+
+      return h(
+        "section",
+        {
+          "data-plugin-section": "dsh-eplan-version",
+          style: {
+            border: "1px solid " + COLORS.border,
+            borderRadius: "12px",
+            padding: "14px 16px",
+            background: COLORS.surface,
+            display: "flex",
+            flexDirection: "column",
+            gap: "10px",
+            maxWidth: "720px",
+          },
+        },
+        ...body,
+      );
+    }
+
     const name = "dsh-eplan";
     const inject = ["slots", "locale"];
 
@@ -531,11 +816,34 @@ window.__ModuleLoader__.load({
       const slots = ctx.get ? ctx.get("slots") : undefined;
       if (!slots || typeof slots.inject !== "function" || typeof slots.register !== "function") return;
 
-      // Every slot registration goes through slots.inject: registering into a
-      // slot the host did not declare at apply time throws, and a throw here
-      // fails renderer boot (white screen).
+      // Every slot registration goes through slots.inject: the callback only
+      // runs once the host declares the slot, so an undeclared slot is a
+      // harmless no-op (older hosts keep working). Registering directly would
+      // race the declaration and could fail renderer boot.
       slots.inject("plugins.bundle.config", () =>
         slots.register({ name: "plugins.bundle.config", key: name, label }, InstallPathSection),
+      );
+
+      // Version records: the host's own update UI is unavailable to a `link:`
+      // bundle, so these three detail-page slots add the missing badge, button
+      // and changelog. Each renderer returns null for any other bundle's page.
+      slots.inject("plugins.detail.badge", () =>
+        slots.register(
+          { name: "plugins.detail.badge", id: "dsh-eplan-version", order: 10, label: () => "dsh-eplan version" },
+          VersionBadge,
+        ),
+      );
+      slots.inject("plugins.detail.actions", () =>
+        slots.register(
+          { name: "plugins.detail.actions", id: "dsh-eplan-version", order: -10, label: () => "dsh-eplan update" },
+          VersionAction,
+        ),
+      );
+      slots.inject("plugins.detail.section", () =>
+        slots.register(
+          { name: "plugins.detail.section", id: "dsh-eplan-version", order: 10, label: () => "dsh-eplan version records" },
+          VersionSection,
+        ),
       );
 
       // Older hosts (no configForms service): the setting lives on its own page

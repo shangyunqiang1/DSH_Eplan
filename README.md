@@ -130,6 +130,38 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup.ps1
 `settings.section`）。`client.js` 由 `package.json` 的 `exports["./client"]` + `dsh.client` 声明，宿主按
 `/plugins/…` 组合下发。
 
+### 版本记录与插件内更新
+
+插件详情页（**设置 → 插件 → dsh-eplan**）自带版本记录，不依赖插件市场：
+
+- 标题旁的 `v0.2.3` 由宿主本身绘制；检测到更新的版本时后面再跟一个 **「可更新到 x.y.z」** 徽标，
+  顶部操作区同时出现 **「更新到 x.y.z」** 按钮（在「卸载」左边）。
+- 页面底部的 **版本记录** 一节列出当前版本、最新版本、检查来源和发布记录（取自 `versions.json`），
+  并提供「检查更新」按钮和 GitHub Release 链接。
+
+为什么不用宿主自带的更新按钮：本插件是 `link:` 协议安装的本地目录，没有 npm `installTarget`，
+宿主 `updateAvailable()` 因此恒为 false，插件市场也明确不给 `link:` 来源提供更新。缺口由本插件自己补：
+
+| 文件 | 作用 |
+| --- | --- |
+| `versions.json` | 发布台账，最新在前；同时就是 GitHub `main` 上的远端清单 |
+| `lib/versions.js` | `POST /api-eplan/version`（状态）、`POST /api-eplan/version/update`（更新）；`compareVersions`、`versionStatus`、`applyUpdate` |
+| `client.js` | 通过 `plugins.detail.{badge,actions,section}` 三个宿主插槽注入徽标、按钮、版本记录节 |
+
+判定与更新行为：
+
+- `latest` 取「本地 `versions.json` 首条」与「远端清单首条」中较大者，`updateAvailable = latest > current`。
+  远端取不到（离线/404）时回落本地台账，`source` 显示 `offline`，界面照常可用。
+- 更新时先尽力 `git fetch` + `git pull --ff-only origin main`（仅在远端领先且工作区干净时），
+  否则把 `package.json#version` 对齐到目标版本——`link:` 安装本来就指向工作树，文件已就位即可生效。
+- 更新完成后需要**在插件页停用再启用 dsh-eplan**（或重启 DSH）让宿主重新读取 bundle，页面会提示这一点。
+
+要发布新版本：改 `package.json#version` → 在 `versions.json` 顶部加一条记录（`version` / `date` / `notes.zh` / `notes.en`）
+→ 提交并推到 `main`。用户在插件页点「检查更新」就能看到，再点「更新到 …」由 `applyUpdate` 落地。
+
+宿主侧实现补充：版本逻辑在 `lib/versions.js`，`index.js` 用 `webCtx.effect(() => registerVersionRoutes(webCtx.webServer, root), …)`
+注册路由；三个插槽组件对其它插件页返回 `null`，只在 `subject.pkg.name === "dsh-eplan"` 时渲染。
+
 ## 离线文档
 
 五套文档索引都只读本地 SQLite，查询不联网。
@@ -376,6 +408,8 @@ EPLAN_DATA_DIR\eplan2025.sqlite …（统一目录）
 │    新克隆的仓库需按「安装 / 重建索引」一节生成，不随源码提交）
 ├─ runtime\python-path.txt          setup 解析出的 Python 路径
 ├─ runtime\eplan-platform-root.txt  用户选的 EPLAN 安装根目录（设置页写入；可选，缺失则自动识别）
+├─ versions.json                    版本台账（最新在前），同时也是 GitHub main 上的远端清单
+├─ lib\versions.js                  版本状态 / 更新实现（/api-eplan/version*）
 ├─ vendor\eplan-mcp\                eplan-mcp v1.3.0 @ 77a78f63（MIT；来源见 vendor\eplan-mcp\PROVENANCE.md）
 ├─ skills\                          eplan · eplan-scripting · eplan-docs · eec-pro-development · eplan-setup
 ├─ licenses\                        MIT 许可证副本
@@ -394,6 +428,7 @@ EPLAN_DATA_DIR\eplan2025.sqlite …（统一目录）
 | 插件列表里六行又变成同一个 `@deepseek-ai/dsh-mcp-client` | `mcp\<row>\` 小包丢了，或 `package.json` 少了 `./mcp/*` 三个导出（`./mcp/*`、`./mcp/*/locale/en.json`、`./mcp/*/locale/zh.json`）；注意不能写成 `./mcp/*/locale/*.json`，Node 只替换一个 `*`。 |
 | 在插件页打开了 2026/2027，重启后又关了 | 开关写在 profile 的 `cordis.patch.yml`；如果那里没有、只有插件包里的 `disabled: true`，就说明插件包被重装覆盖了。重新在插件页打开即可，插件包的默认值不会被改成 2025 以外。 |
 | 设置页显示「未检测到」但 EPLAN 确实装了 | 手动粘贴路径，或用浏览器按钮从盘符逐级进去；也确认安装目录下确实有 `<版本>\Bin\Eplan.EplApi.RemoteClientu.dll`。 |
+| 详情页没有「更新到 …」按钮和版本记录 | 三点依次排查：`client.js` 是否含 `plugins.detail.section`（旧 bundle 没有）；`POST /api-eplan/version` 是否 200（`lib/versions.js` 没注册说明 `index.js` 版本旧）；`versions.json` 首条是否高于 `package.json#version`——没有更高版本时按钮按设计不显示。 |
 | `ModuleNotFoundError: mcp` / `clr` | 解释器不对。`setup.ps1 -Python <带 mcp 和 pythonnet 的 python>`。 |
 | `eplan_connect` 报 gRPC "failed to connect to all addresses" | 未开远程访问 / EPLAN 没启动 / 端口不是 49152。让用户用 `netstat -ano | findstr LISTENING` 对照 EPLAN.exe 的 PID 查真实端口。 |
 | 连到了错误的 EPLAN 版本 / `eplan_connect` 回报 2026 | 只装 2025 时自动检测仍可能报 2026：显式 `eplan_connect({version:"2025"})` 再让服务器加载 DLL；一个进程只能加载一个大版本，换版本要重启 DSH。v1.3.0 的 2027 专用工具仅对 2027 生效。 |

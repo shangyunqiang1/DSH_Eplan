@@ -1,0 +1,24 @@
+{
+  "schema": "dsh-eplan/versions/1",
+  "package": "dsh-eplan",
+  "repository": "https://github.com/shangyunqiang1/DSH_Eplan",
+  "releasesUrl": "https://github.com/shangyunqiang1/DSH_Eplan/releases",
+  "releases": [
+    {
+      "version": "0.2.4",
+      "date": "2026-11-09",
+      "notes": {
+        "zh": "新增「版本记录」：插件详情页显示版本徽标、历史发布记录、检查更新与「更新到新版本」按钮；检测到新版本时显示「可更新」标记。本地 link 安装的更新通过 Git 快进（远端领先时）或对齐已检出的发布完成，更新后需停用再启用插件。",
+        "en": "Added version records: the plugin detail page now shows the version badge, release history, a check-for-updates control and an Update to a new version button, with an Update available badge when a newer release is detected. For the local link install, an update fast-forwards git when the remote is ahead or finalises the checked-out release; disable and re-enable the plugin afterwards."
+      }
+    },
+    {
+      "version": "0.2.3",
+      "date": "2026-11-04",
+      "notes": {
+        "zh": "首个正式版本：EPLAN Electric P8 2025 集成（eplan-mcp v1.3.0）、五套离线文档索引（2025 .NET API / 2025 平台手册 / 2026 / 2027 / EEC Pro）、安装路径设置页以及五套技能。",
+        "en": "First release: EPLAN Electric P8 2025 integration (eplan-mcp v1.3.0), five offline documentation indexes (2025 .NET API / 2025 platform help / 2026 / 2027 / EEC Pro), the install-path settings page and five skills."
+      }
+    }
+  ]
+}

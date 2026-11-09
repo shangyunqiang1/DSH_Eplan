@@ -1,6 +1,6 @@
 {
   "name": "dsh-eplan",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "private": true,
   "type": "module",
   "description": "EPLAN Electric P8 integration for DeepSeek Harness: local EPLAN automation MCP, offline P8 2025 API reference and platform guide, plus offline P8 2026 / 2027 / EEC Pro documentation lookup.",
@@ -17,6 +17,7 @@
   "files": [
     "index.js",
     "client.js",
+    "versions.json",
     "mcp/*/index.js",
     "mcp/*/locale/*.json",
     "lib/*.js",
