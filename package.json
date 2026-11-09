@@ -3,8 +3,16 @@
   "version": "0.2.4",
   "private": true,
   "type": "module",
-  "description": "EPLAN Electric P8 integration for DeepSeek Harness: local EPLAN automation MCP, offline P8 2025 API reference and platform guide, plus offline P8 2026 / 2027 / EEC Pro documentation lookup.",
+  "description": "EPLAN Electric P8 integration for DeepSeek Harness: a bundled local EPLAN automation MCP server, an offline P8 2025 .NET API reference and platform guide built from the installed docs, and offline 2026 / 2027 / EEC Pro documentation lookups (those three ship disabled and read indexes extracted from the release assets).",
   "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shangyunqiang1/DSH_Eplan.git"
+  },
+  "homepage": "https://github.com/shangyunqiang1/DSH_Eplan#readme",
+  "bugs": {
+    "url": "https://github.com/shangyunqiang1/DSH_Eplan/issues"
+  },
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",
@@ -31,6 +39,8 @@
     "vendor/**",
     "data/README.md",
     "README.md",
+    "LICENSE",
+    "licenses/*",
     "THIRD_PARTY_NOTICES.md"
   ],
   "dsh": {
@@ -46,7 +56,7 @@
     "node": "^22.19.0 || >=24.0.0"
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh-mcp-client": ">=0.2.1-rc.1"
+    "@deepseek-ai/dsh-mcp-client": ">=0.2.1-rc.1 <0.2.2-0 || >=0.2.2-rc.1 <0.3.0-0"
   },
   "keywords": [
     "deepseek-harness",

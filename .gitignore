@@ -28,3 +28,14 @@ Thumbs.db
 # the two .gitkeep files are shipped as empty placeholders upstream)
 vendor/eplan-mcp/eplan-p8-mcp-server/mcp_server/scripts/generated/
 vendor/eplan-mcp/eplan-p8-mcp-server/mcp_server/scripts/results/
+# 安装/构建过程中被误建的占位目录（例如某个工具把空路径拼成了 "undefined"）
+/undefined/
+
+# Release 附件是本地产物，下载后落在仓库根，不入库
+/DSH_Eplan-offline-indexes.zip
+
+# 发版时临时写的发布说明
+/.release-notes.md
+
+# vendor 子进程可能写出的日志目录
+/vendor/**/logs/

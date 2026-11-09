@@ -103,21 +103,22 @@ if (-not $pythonOk) {
     Write-Warning "This Python lacks 'mcp'/'pythonnet': the EPLAN automation server will not start. The 2025 documentation server still works."
 }
 
-# --- 4. Regenerate absolute paths in the bundle patch -----------------------
-# Every launcher path and every `cwd:` in cordis.patch.yml is absolute. Rewrite
-# whatever bundle root those rows currently point at (this machine after a move,
-# or the machine that produced the checkout) to $Root, keeping the bundle-relative
-# tail (scripts\, server\, vendor\). Idempotent: re-running changes nothing.
+# --- 4. Bundle patch self-check --------------------------------------------
+# cordis.patch.yml contains no absolute path: every row launches
+# scripts\launch-*.cmd by a cwd-relative name, and the `cwd:` values are
+# evaluated at load time from the installed package location. Nothing has to be
+# rewritten after a move or a fresh clone, so this stage only verifies that the
+# bundle still holds together and points the user at the plugin settings page
+# when it does not.
 if (Test-Path $PatchFile) {
     $patch = [System.IO.File]::ReadAllText($PatchFile)
-    $rootTail = $Root.TrimEnd('\')
-    $normalized = [regex]::Replace($patch, "([A-Za-z]:[\\/][^'\r\n]*?)(\\(?:scripts|server|vendor)\\)", {
-            param($m)
-            $rootTail + $m.Groups[2].Value
-        })
-    if ($normalized -ne $patch) {
-        [System.IO.File]::WriteAllText($PatchFile, $normalized, (New-Object System.Text.UTF8Encoding($false)))
-        Write-Host "Updated paths in cordis.patch.yml -> $rootTail"
+    $absolute = [regex]::Matches($patch, "[A-Za-z]:[\\/][^'\r\n]*")
+    if ($absolute.Count -gt 0) {
+        Write-Warning "cordis.patch.yml contains $($absolute.Count) absolute path(s); the bundle is meant to stay portable. Check the file against the packaged version."
+    }
+    foreach ($launcher in @('launch-eplan-mcp.cmd', 'launch-docs2025.cmd', 'launch-docs2025guide.cmd', 'launch-docs2026.cmd', 'launch-docs2027.cmd', 'launch-docseecpro.cmd')) {
+        $path = Join-Path $Root "scripts\$launcher"
+        if (-not (Test-Path $path)) { Write-Warning "Bundle launcher missing: $path" }
     }
 }
 

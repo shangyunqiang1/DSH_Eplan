@@ -1,0 +1,8 @@
+# Windows 脚本必须保持 CRLF：cmd.exe 解析 LF 的 .cmd 会在标签与续行上出错，
+# PowerShell 的 here-string 同理。以仓库内二进制为准，检出到任何平台都不改写。
+*.cmd   text eol=crlf
+*.ps1   text eol=crlf
+*.bat   text eol=crlf
+
+# 其余文本走 git 的自动判定
+*       text=auto

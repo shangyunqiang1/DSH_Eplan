@@ -1,7 +1,9 @@
 # Third-party notices
 
-DSH_Eplan (this bundle) is MIT-licensed. It redistributes, vendors or derives from the following
-third-party work. Upstream licences are reproduced in `licenses/`; nothing below is relicensed.
+DSH_Eplan (this bundle) is MIT-licensed — see the root `LICENSE`. It redistributes, vendors or
+derives from the following third-party work; the upstream MIT texts are reproduced in `licenses/`
+and the vendored copy that ships its own licence file also keeps it in place. Nothing below is
+relicensed: each vendored part stays under its upstream terms.
 
 ## eplan-mcp — `vendor/eplan-mcp/`
 

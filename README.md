@@ -71,22 +71,28 @@ EEC Pro 进 `eec-pro-development`，插件本身坏了进 `eplan-setup`。正文
    2025 的 API 索引完全来自本机安装的 XML。
 
 ```powershell
-# 先进入本插件的根目录（换机器 / 换盘符时把这一行改成实际路径即可）
+# 1) 初始化：解析 Python、探测 EPLAN 安装路径、构建 2025 API 索引
+#    先进入插件根目录（解压出来的那个目录，换盘符不影响后续任何步骤）
 Set-Location "C:\path\to\DSH_Eplan"
-$bundle = (Get-Location).Path          # 下文重建命令都以它为基准
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup.ps1
+
+# 2) 在 DSH 里安装这个目录：插件 → 安装 → 选上面的插件根目录
+#    （也可以用 git 地址安装，见下）
 ```
 
 `setup.ps1` 会：校验并写入 `runtime\python-path.txt`；定位 EPLAN 安装路径并写入
 `runtime\eplan-platform-root.txt`（已经选过就保留用户的选择）；把 `.cmd` 启动器规范为 CRLF；
-校验 `vendor/eplan-mcp` 完整性（仅当目录缺失时才从 Bochica 运行时补齐，正常安装不会触发）；
-重写 `cordis.patch.yml` 中过期的绝对路径；构建 `data\eplan2025.sqlite`
+校验 `vendor/eplan-mcp` 完整性与六个启动器是否齐全；构建 `data\eplan2025.sqlite`
 （约 35 MB / 4 秒）。可选参数：`-Python <路径>`、`-PlatformRoot <路径>`、`-RebuildIndex`、`-SkipIndex`。
 
-然后在 DSH 中通过 plugin manager 安装该目录（即上面 `$bundle` 指向的插件根目录；换一台机器就是解压后的
-那个目录）。安装完成后
-6 个 MCP 服务器会立即热挂载（本机已验证：`mcp__eplan__*`、`mcp__eplan2025__*`、`mcp__eplan2025guide__*`、
-`mcp__eplan2026__*`、`mcp__eplan2027__*`、`mcp__eecpro__*` 全部在线）；而**技能目录在会话开始时构建**，5 个技能
+`cordis.patch.yml` 里**没有任何绝对路径**：每个 MCP 行都用 `cmd.exe` 加一个相对启动器名
+（`scripts\launch-*.cmd`）启动，`cwd` 由 `!!js` 在加载时按已安装包的位置算出来。所以插件装在哪个盘、
+哪个目录都不用改文件；换机器、升级、重新解压都不会把路径写错。
+
+装好后**默认挂 4 个** MCP 服务器：`mcp__eplan__*`（本地 EPLAN 自动化）、`mcp__eplan2025__*`（2025 API）、
+`mcp__eplan2025guide__*`（2025 手册）、`mcp__eecpro__*`（EEC Pro 2026 帮助）。`mcp__eplan2026__*` 与
+`mcp__eplan2027__*` 在 `cordis.patch.yml` 里是 `disabled: true`：它们的索引来自 Release 资源，没解压到
+`data\` 之前打开也只会报缺库，需要时到 **设置 → 插件** 打开即可。**技能目录在会话开始时构建**，5 个技能
 （eplan / eplan-scripting / eplan-docs / eec-pro-development / eplan-setup）需要新开一个会话
 （或重启 DSH）后才会出现在技能列表里。系统提示中的 `eplan:integration` 区块同样随即生效。
 
@@ -134,7 +140,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup.ps1
 
 插件详情页（**设置 → 插件 → dsh-eplan**）自带版本记录，不依赖插件市场：
 
-- 标题旁的 `v0.2.3` 由宿主本身绘制；检测到更新的版本时后面再跟一个 **「可更新到 x.y.z」** 徽标，
+- 标题旁的 `v0.2.4` 由宿主本身绘制；检测到更新的版本时后面再跟一个 **「可更新到 x.y.z」** 徽标，
   顶部操作区同时出现 **「更新到 x.y.z」** 按钮（在「卸载」左边）。
 - 页面底部的 **版本记录** 一节列出当前版本、最新版本、检查来源和发布记录（取自 `versions.json`），
   并提供「检查更新」按钮和 GitHub Release 链接。
@@ -374,8 +380,9 @@ EPLAN_DATA_DIR\eplan2025.sqlite …（统一目录）
 <插件目录>\data\eplan2025.sqlite …（默认）
 ```
 
-`cordis.patch.yml` 里每个启动器的路径和 `cwd` 都是绝对路径，`setup.ps1` 会把它们改写成当前插件目录，
-所以换机器/换盘符后重跑一次 `setup.ps1` 即可，不用手改 YAML。
+`cordis.patch.yml` 里没有任何绝对路径：每行只写 `cmd.exe` 和一个相对启动器名（如 `scripts\launch-docs2025.cmd`），
+`cwd` 由 `!!js` 表达式在加载时解析成当前插件目录，所以换机器/换盘符不用改 YAML，也不用先跑 `setup.ps1` 才能搬。
+换机器真正要做的是机器本地的东西：重跑一次 `setup.ps1` 重写 `runtime\python-path.txt`、把五个 `.sqlite` 解压进 `data\`。
 
 ## 安全
 
