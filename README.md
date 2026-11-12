@@ -136,11 +136,48 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup.ps1
 `settings.section`）。`client.js` 由 `package.json` 的 `exports["./client"]` + `dsh.client` 声明，宿主按
 `/plugins/…` 组合下发。
 
+### 连接状态指示（已连接 / 未连接）
+
+插件详情页标题右侧有一个彩色状态灯，每 5 秒自动刷新，页面打开时也能一眼看出 EPLAN 是否真的连上：
+
+| 显示 | 含义 | 怎么处理 |
+| --- | --- | --- |
+| 🟢 **EPLAN 已连接** | EPLAN 进程在跑，且宿主里 `mcp__eplan__*` 工具已注册 | 可以直接出图 |
+| ⚪ **EPLAN 已启动 · MCP 未连上** | EPLAN 进程在跑，但 MCP 工具已注销（重连预算耗尽） | 重启 DSH，或在插件页停用/启用 `eplan` |
+| ⚪ **EPLAN 已启动** | 进程在跑；宿主工具注册表读不到（非 Web 宿主） | 只需确认 EPLAN 已打开 |
+| ⚪ **MCP 已就绪 · EPLAN 未运行** | 工具在，但 EPLAN.exe 没启动 | 打开 EPLAN Electric P8 |
+| 🔴 **EPLAN 未运行** | 两者都没有 | 启动 EPLAN |
+| ⚪ **连接状态未知** | 非 Windows 宿主或探测失败 | 不影响其它功能 |
+
+探测由宿主完成（浏览器看不到进程）：`lib/connection.js` 先用 `tasklist` 拿到 `EPLAN.exe` 的 PID，
+再用 `netstat -ano -p TCP` 找 **该 PID** 正在监听的端口（remoting 端口是动态的，49152 只是常见首选），
+同时读宿主工具注册表判断 `mcp__eplan__*` 是否还在。结果经 `GET /api-eplan/connection` 下发，
+宿主侧缓存约 1.2 秒，前端轮询不会把机器压满（一次探测约 300 ms）。
+
+> **不要用「TCP 能连 127.0.0.1:49152」判断已连接**：EPLAN 只把 remoting 端口绑在网卡地址上
+> （本机实测是 192.168.x.x / 169.254.x.x），回环探测必然 `ECONNREFUSED`，但 `eplan_connect` 依然成功。
+> 这也是 `lib/connection.js` 从 PID 反查端口、而不是假定端口的原因。
+
+### 开着代理时的连接问题（必须清代理变量）
+
+EPLAN 的 Remote Client 走 gRPC，底层是 **原生 C-core 通道**——它读进程环境里的 `HTTP_PROXY` /
+`HTTPS_PROXY` / `ALL_PROXY`，并且**对局域网和回环目标也一样走代理**。代理隧道在 EPLAN 的 remoting
+端口上被丢弃后，`eplan_connect` 就报 gRPC `failed to connect to all addresses`（`grpc_status 14`）；
+同一时刻用裸 TCP/h2c 直连同一个 `host:port` 却是通的，很容易误判成「EPLAN 没开远程访问」。
+
+- `NO_PROXY=*` **不管用**（C-core 不透传该变量），必须把变量本身清空。
+- 清理必须发生在 **python 启动之前**：`scripts\launch-eplan-mcp.cmd` 在 `set` `EPLAN_PLATFORM_ROOT`
+  之后、调用解释器之前，清掉 `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY`（含小写）、`GRPC_PROXY`（含小写）
+  与 `NODE_USE_ENV_PROXY` 共 9 个变量。在服务器进程里 `del os.environ` 太晚——gRPC 在客户端初始化时已读走。
+- `C:\Users\<用户>\.dsh\.env` 里的代理变量只在 `launch-*` 这类 `.cmd` 之前生效；它不含
+  `EPLAN_PLATFORM_ROOT`，影响的是整个 DSH 进程的环境，与 EPLAN 安装在哪个目录无关。
+- **升级插件会覆盖启动器**，重新打补丁前先确认这段 `rem --- Strip HTTP proxy variables` 还在。
+
 ### 版本记录与插件内更新
 
 插件详情页（**设置 → 插件 → dsh-eplan**）自带版本记录，不依赖插件市场：
 
-- 标题旁的 `v0.2.4` 由宿主本身绘制；检测到更新的版本时后面再跟一个 **「可更新到 x.y.z」** 徽标，
+- 标题旁的 `v0.2.5` 由宿主本身绘制；检测到更新的版本时后面再跟一个 **「可更新到 x.y.z」** 徽标，
   顶部操作区同时出现 **「更新到 x.y.z」** 按钮（在「卸载」左边）。
 - 页面底部的 **版本记录** 一节列出当前版本、最新版本、检查来源和发布记录（取自 `versions.json`），
   并提供「检查更新」按钮和 GitHub Release 链接。
@@ -397,13 +434,16 @@ EPLAN_DATA_DIR\eplan2025.sqlite …（统一目录）
 ```text
 <插件目录>   （即 $bundle 指向的位置）
 ├─ package.json / cordis.patch.yml / index.js / icon.svg / locale/
-├─ client.js                        设置页（单个路径框）
+├─ client.js                        设置页（单个路径框）+ 连接状态灯 + 版本记录
 ├─ lib\platform.js · lib\routes.js  安装路径探测 / 宿主路由
+├─ lib\connection.js                连接状态探测（EPLAN.exe PID → remoting 端口 → MCP 工具）
 ├─ mcp\<row>\                       行标题小包（eplan · eplan2025 · eplan2025guide · eplan2026 · eplan2027 · eecpro）
 │            index.js 转发 @deepseek-ai/dsh-mcp-client，locale\{en,zh}.json 提供标题与说明
 ├─ scripts\  setup.ps1 · launch-eplan-mcp.cmd · launch-docs2025.cmd · launch-docs2025guide.cmd
 │            launch-docs2026.cmd · launch-docs2027.cmd · launch-docseecpro.cmd
 │            build-eplan2025-index.py · build-help-index.py
+│            clean-dsh-auth-cookies.cmd / .ps1
+│            （清 DSH 累积的 dsh-auth-* cookie；.cmd 兼作启动包装器）
 ├─ server\docs2025\server.py        离线 2025 API 文档 MCP（仅标准库）
 ├─ server\docs\server.py            离线 2025 手册 / 2026 / 2027 / EEC Pro 文档 MCP（仅标准库，--docset）
 ├─ data\eplan2025.sqlite            2025 API 索引（35.5 MB / 36,493 成员）
@@ -437,7 +477,9 @@ EPLAN_DATA_DIR\eplan2025.sqlite …（统一目录）
 | 设置页显示「未检测到」但 EPLAN 确实装了 | 手动粘贴路径，或用浏览器按钮从盘符逐级进去；也确认安装目录下确实有 `<版本>\Bin\Eplan.EplApi.RemoteClientu.dll`。 |
 | 详情页没有「更新到 …」按钮和版本记录 | 三点依次排查：`client.js` 是否含 `plugins.detail.section`（旧 bundle 没有）；`POST /api-eplan/version` 是否 200（`lib/versions.js` 没注册说明 `index.js` 版本旧）；`versions.json` 首条是否高于 `package.json#version`——没有更高版本时按钮按设计不显示。 |
 | `ModuleNotFoundError: mcp` / `clr` | 解释器不对。`setup.ps1 -Python <带 mcp 和 pythonnet 的 python>`。 |
-| `eplan_connect` 报 gRPC "failed to connect to all addresses" | 未开远程访问 / EPLAN 没启动 / 端口不是 49152。让用户用 `netstat -ano | findstr LISTENING` 对照 EPLAN.exe 的 PID 查真实端口。 |
+| `eplan_connect` 报 gRPC "failed to connect to all addresses" | 先排除代理：`HTTP_PROXY`/`HTTPS_PROXY`/`ALL_PROXY`（含 `GRPC_PROXY`、`NODE_USE_ENV_PROXY`）会让 gRPC 的 C-core 栈把局域网/回环目标也塞进代理隧道，隧道在 remoting 端口被断开就报 status 14 —— 此时 `NO_PROXY=*` 无效，必须清空变量；`scripts\launch-eplan-mcp.cmd` 已在 python 启动前清掉这 9 个变量。其次才是：未开远程访问 / EPLAN 没启动 / 端口不是 49152。用 `netstat -ano | findstr LISTENING` 对照 EPLAN.exe 的 PID 查真实端口。 |
+| DSH 启动即退出，日志有 `desktop welcome: Web authentication failed` | 随机端口导致 `dsh-auth-*` cookie 每启动一次新增一个、旧的只叠加不覆盖，Cookie 头涨过 Node 默认 16 KB 上限后被 431 拒掉。退出 DSH 后运行 `scripts\clean-dsh-auth-cookies.cmd`（或把开始菜单快捷方式指向它，启动前自动清理，并附带 `NODE_OPTIONS=--max-http-header-size=1048576` 兜底）。 |
+| 详情页没有连接状态灯 | 三点依次排查：`client.js` 是否含 `plugins.detail.badge#dsh-eplan-connection`（旧 bundle 没有）；`GET /api-eplan/connection` 是否 200（`lib/connection.js` 没注册说明 `index.js` 版本旧）；返回的 `state` 是否为 `unknown`（非 Windows 宿主）。 |
 | 连到了错误的 EPLAN 版本 / `eplan_connect` 回报 2026 | 只装 2025 时自动检测仍可能报 2026：显式 `eplan_connect({version:"2025"})` 再让服务器加载 DLL；一个进程只能加载一个大版本，换版本要重启 DSH。v1.3.0 的 2027 专用工具仅对 2027 生效。 |
 | EPLAN 突然不响应、两分钟后断连 | 2025 的 `eplan_dataportal_add_to_download_list` 会弹出 Data Portal 模态窗口且脚本不返回：让用户在该窗口下载并关闭后再继续；期间不要重复排队。 |
 | `eplan2025_search` 没结果 / stats 找不到库 | 重建索引；确认 `--xml-dir` 指向已安装平台的 `Bin`。 |

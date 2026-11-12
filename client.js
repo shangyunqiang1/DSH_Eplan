@@ -77,6 +77,22 @@ window.__ModuleLoader__.load({
         "version.error": "版本信息不可用：{msg}",
         "version.updateFailed": "更新失败：{msg}",
         "version.noReleases": "暂无发布记录。",
+        "conn.connected": "EPLAN 已连接",
+        "conn.eplanOnly": "EPLAN 已启动 · MCP 未连上",
+        "conn.eplanStarted": "EPLAN 已启动",
+        "conn.mcpOnly": "MCP 已就绪 · EPLAN 未运行",
+        "conn.disconnected": "EPLAN 未运行",
+        "conn.unknown": "连接状态未知",
+        "conn.checking": "正在检测…",
+        "conn.retry": "重新检测",
+        "conn.title": "EPLAN 连接状态",
+        "conn.detail.connected": "EPLAN 进程 {pid} · 端口 {port} · MCP 工具 {count} 个",
+        "conn.detail.eplanOnly": "EPLAN 进程 {pid} · 端口 {port}，但 mcp__eplan__* 工具尚未注册 — 需要重启 DSH 或该 MCP 服务器。",
+        "conn.detail.eplanStarted": "EPLAN 进程 {pid} · 端口 {port}（无法读取宿主工具注册表）。",
+        "conn.detail.mcpOnly": "MCP 已连接但 EPLAN 未启动，请先打开 EPLAN。",
+        "conn.detail.disconnected": "未发现 EPLAN.exe，请先启动 EPLAN Electric P8。",
+        "conn.detail.unknown": "无法检测（非 Windows 宿主或探测失败）。",
+        "conn.live": "每 5 秒自动检测",
       },
       en: {
         "settings.title": "EPLAN install path",
@@ -134,6 +150,23 @@ window.__ModuleLoader__.load({
         "version.error": "Version information unavailable: {msg}",
         "version.updateFailed": "Update failed: {msg}",
         "version.noReleases": "No release records yet.",
+        "conn.connected": "EPLAN connected",
+        "conn.eplanOnly": "EPLAN running · MCP not connected",
+        "conn.eplanStarted": "EPLAN running",
+        "conn.mcpOnly": "MCP ready · EPLAN not running",
+        "conn.disconnected": "EPLAN not running",
+        "conn.unknown": "Connection unknown",
+        "conn.checking": "Checking…",
+        "conn.retry": "Check again",
+        "conn.title": "EPLAN connection",
+        "conn.detail.connected": "EPLAN pid {pid} · port {port} · {count} MCP tool(s)",
+        "conn.detail.eplanOnly":
+          "EPLAN pid {pid} · port {port}, but the mcp__eplan__* tools are not registered — restart DSH or that MCP server.",
+        "conn.detail.eplanStarted": "EPLAN pid {pid} · port {port} (host tool registry unreadable).",
+        "conn.detail.mcpOnly": "The MCP client is connected but EPLAN is not running — start EPLAN first.",
+        "conn.detail.disconnected": "No EPLAN.exe found — start EPLAN Electric P8 first.",
+        "conn.detail.unknown": "Cannot probe (non-Windows host or the probe failed).",
+        "conn.live": "Checked every 5 seconds",
       },
     };
 
@@ -293,6 +326,177 @@ window.__ModuleLoader__.load({
       );
     }
 
+    // ── live connection indicator ────────────────────────────────────────────
+    // The host answers /api-eplan/connection from real system facts: the
+    // EPLAN.exe PID, the remoting port that PID is listening on, and whether the
+    // mcp__eplan__* tools are still registered in the host tool registry. A
+    // loopback TCP probe would be wrong here — EPLAN binds its remoting socket
+    // to the NIC addresses only, so 127.0.0.1:49152 refuses to connect even
+    // while eplan_connect keeps working.
+    const CONNECTION_REFRESH_MS = 5000;
+
+    const CONNECTION_LABELS = {
+      connected: "conn.connected",
+      "eplan-only": "conn.eplanOnly",
+      "eplan-started": "conn.eplanStarted",
+      "mcp-only": "conn.mcpOnly",
+      disconnected: "conn.disconnected",
+      unknown: "conn.unknown",
+    };
+
+    const CONNECTION_DETAILS = {
+      connected: "conn.detail.connected",
+      "eplan-only": "conn.detail.eplanOnly",
+      "eplan-started": "conn.detail.eplanStarted",
+      "mcp-only": "conn.detail.mcpOnly",
+      disconnected: "conn.detail.disconnected",
+      unknown: "conn.detail.unknown",
+    };
+
+    function createConnectionStore() {
+      let state = { data: null, at: 0, error: null, checking: false };
+      const listeners = new Set();
+      let inflight = null;
+      const set = (patch) => {
+        state = Object.assign({}, state, patch);
+        for (const fn of listeners) {
+          try {
+            fn();
+          } catch (_) {
+            /* a dead component must not stop the others */
+          }
+        }
+      };
+      // Resolves on every outcome: a failed probe is a state the UI renders,
+      // not an exception the caller has to catch.
+      const load = () => {
+        if (inflight) return inflight;
+        set({ checking: true });
+        inflight = (async () => {
+          try {
+            const resp = await fetch("/api-eplan/connection");
+            let data = null;
+            try {
+              data = await resp.json();
+            } catch (_) {
+              data = null;
+            }
+            if (!data || typeof data !== "object") throw new Error("connection probe returned nothing");
+            set({ data, at: Date.now(), error: null, checking: false });
+          } catch (err) {
+            set({ data: null, error: errorText(err), checking: false });
+          } finally {
+            inflight = null;
+          }
+        })();
+        return inflight;
+      };
+      return {
+        getSnapshot: () => state,
+        subscribe: (fn) => {
+          listeners.add(fn);
+          return () => listeners.delete(fn);
+        },
+        load,
+      };
+    }
+
+    const connectionStore = createConnectionStore();
+
+    function useConnection() {
+      const [snap, setSnap] = useState(connectionStore.getSnapshot);
+      useEffect(() => {
+        const stop = connectionStore.subscribe(() => setSnap(connectionStore.getSnapshot()));
+        connectionStore.load();
+        const timer = setInterval(() => connectionStore.load(), CONNECTION_REFRESH_MS);
+        // Node keeps the process alive for a live interval; the browser has no
+        // unref, which is why this is guarded instead of assumed.
+        if (timer && typeof timer.unref === "function") timer.unref();
+        return () => {
+          stop();
+          clearInterval(timer);
+        };
+      }, []);
+      return snap;
+    }
+
+    /** One of the six CONNECTION_LABELS keys; never throws on a malformed payload. */
+    function connectionStateOf(snap) {
+      const data = snap && snap.data;
+      const raw = data && typeof data.state === "string" ? data.state : null;
+      if (raw && CONNECTION_LABELS[raw]) return raw;
+      if (snap && snap.checking) return "checking";
+      return "unknown";
+    }
+
+    function connectionColor(state) {
+      if (state === "connected") return COLORS.success;
+      if (state === "disconnected") return COLORS.error;
+      if (state === "unknown" || state === "checking") return COLORS.dimmer;
+      return COLORS.text;
+    }
+
+    /** The visible badge: dot + wording, coloured by state, big enough to spot. */
+    function connectionPill(t, snap) {
+      const state = connectionStateOf(snap);
+      const color = connectionColor(state);
+      const text = state === "checking" ? t("conn.checking") : t(CONNECTION_LABELS[state] || "conn.unknown");
+      return h(
+        "span",
+        {
+          "data-eplan-connection": state,
+          title: t("conn.live"),
+          style: {
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "7px",
+            padding: "5px 12px",
+            borderRadius: "999px",
+            border: "1px solid " + color,
+            background: COLORS.field,
+            color: color,
+            fontSize: "12.5px",
+            fontWeight: 600,
+            whiteSpace: "nowrap",
+            flex: "none",
+          },
+        },
+        h("span", {
+          style: {
+            width: "8px",
+            height: "8px",
+            borderRadius: "50%",
+            background: color,
+            flex: "none",
+          },
+        }),
+        text,
+      );
+    }
+
+    function connectionDetail(t, snap) {
+      const state = connectionStateOf(snap);
+      if (state === "checking") return t("conn.checking");
+      if (snap && snap.error) return t("error.route", { msg: snap.error });
+      const data = (snap && snap.data) || {};
+      const eplan = data.eplan || {};
+      const mcp = data.mcp || {};
+      return fill(t(CONNECTION_DETAILS[state] || "conn.detail.unknown"), {
+        pid: (eplan.pids && eplan.pids[0]) || "?",
+        port: eplan.port || "?",
+        count: mcp.count || 0,
+      });
+    }
+
+    /** Detail-page header badge: sits next to the host's own vX.Y.Z chip. */
+    function ConnectionBadge(props) {
+      const t = useTranslate();
+      const snap = useConnection();
+      if (!isOurBundle(props && props.subject)) return null;
+      if (!snap || (!snap.data && !snap.error && !snap.checking)) return null;
+      return connectionPill(t, snap);
+    }
+
     function InstallPathSection() {
       const t = useTranslate();
       const [state, setState] = useState(null);
@@ -302,6 +506,7 @@ window.__ModuleLoader__.load({
       const [error, setError] = useState(null);
       const [notice, setNotice] = useState(null);
       const [probeNote, setProbeNote] = useState(null);
+      const connection = useConnection();
       const alive = useRef(true);
 
       useEffect(() => {
@@ -484,8 +689,19 @@ window.__ModuleLoader__.load({
             maxWidth: "720px",
           },
         },
-        h("div", { style: { fontSize: "15px", fontWeight: 600, color: COLORS.text } }, t("settings.title")),
+        h(
+          "div",
+          { style: { display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" } },
+          h("div", { style: { fontSize: "15px", fontWeight: 600, color: COLORS.text } }, t("settings.title")),
+          connectionPill(t, connection),
+        ),
         h("div", { style: { fontSize: "12.5px", color: COLORS.dim, lineHeight: "1.6" } }, t("settings.description")),
+        h(
+          "div",
+          { style: { display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" } },
+          h("div", { style: { fontSize: "12px", color: COLORS.dimmer, lineHeight: "1.6" } }, connectionDetail(t, connection)),
+          button(t("conn.retry"), () => connectionStore.load(), {}),
+        ),
 
         // ── the one path control ────────────────────────────────────────────
         // A single box: the path in use, the field to change it, and the
@@ -831,6 +1047,16 @@ window.__ModuleLoader__.load({
         slots.register(
           { name: "plugins.detail.badge", id: "dsh-eplan-version", order: 10, label: () => "dsh-eplan version" },
           VersionBadge,
+        ),
+      );
+
+      // The connection light sits first in the detail-page badge row, left of
+      // the host's own version chip, so "is EPLAN reachable?" is the first
+      // thing read on the page.
+      slots.inject("plugins.detail.badge", () =>
+        slots.register(
+          { name: "plugins.detail.badge", id: "dsh-eplan-connection", order: -10, label: () => "EPLAN connection" },
+          ConnectionBadge,
         ),
       );
       slots.inject("plugins.detail.actions", () =>

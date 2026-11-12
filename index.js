@@ -17,6 +17,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createRootStore, registerRoutes } from './lib/routes.js'
+import { probeConnection } from './lib/connection.js'
 import { registerVersionRoutes } from './lib/versions.js'
 
 export const name = 'dsh-eplan'
@@ -125,6 +126,33 @@ export function apply(ctx, config) {
           },
         }),
       'dsh-eplan: health route',
+    )
+  })
+
+  // The connection indicator: the browser half cannot see processes, so the
+  // host answers "is EPLAN there?" from live system facts. probeConnection
+  // never throws and is cached for ~1 s, so the UI may poll it freely.
+  ctx.inject(['webServer'], (webCtx) => {
+    webCtx.effect(
+      () =>
+        webCtx.webServer.register({
+          kind: 'exact',
+          path: '/api-eplan/connection',
+          handler: async (req, res) => {
+            let payload
+            try {
+              // Resolved lazily: the tools service mounts after this plugin.
+              payload = await probeConnection({
+                tools: () => (typeof ctx.get === 'function' ? ctx.get('tools') : undefined),
+              })
+            } catch (error) {
+              payload = { ok: false, state: 'unknown', error: String(error && error.message) }
+            }
+            res.writeHead(200, { 'content-type': 'application/json' })
+            res.end(JSON.stringify(payload))
+          },
+        }),
+      'dsh-eplan: connection route',
     )
   })
 

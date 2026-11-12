@@ -5,6 +5,14 @@
   "releasesUrl": "https://github.com/shangyunqiang1/DSH_Eplan/releases",
   "releases": [
     {
+      "version": "0.2.5",
+      "date": "2026-11-12",
+      "notes": {
+        "zh": "新增连接状态指示：插件详情页与设置页标题旁显示彩色状态灯（EPLAN 已连接 / 已启动未连上 / 未运行 / 状态未知），每 5 秒由宿主用 tasklist + netstat 按 PID 反查 remoting 端口探测，经 GET /api-eplan/connection 下发。修复代理导致 EPLAN MCP 连不上：启动器在 python 之前清空 HTTP_PROXY/HTTPS_PROXY/ALL_PROXY 等 9 个变量。附带 dsh-auth cookie 清理脚本（退出 DSH 后运行），用于修复随机端口导致 cookie 累积、Cookie 头超过 Node 16 KB 上限而报 Web authentication failed 的问题。",
+        "en": "Added a live connection indicator: a coloured status light on the plugin detail page and the settings heading (EPLAN connected / started but MCP down / not running / unknown), refreshed every 5 seconds by a host-side probe that maps EPLAN.exe PIDs to their listening remoting port with tasklist + netstat and is served over GET /api-eplan/connection. Fixed EPLAN MCP connection failures behind a proxy: the launcher now clears HTTP_PROXY/HTTPS_PROXY/ALL_PROXY and six other variables before python starts. Added a dsh-auth cookie cleanup script (run with DSH closed) for the random-port cookie accumulation that overran Node's 16 KB header limit and failed the welcome handshake with Web authentication failed."
+      }
+    },
+    {
       "version": "0.2.4",
       "date": "2026-11-09",
       "notes": {
